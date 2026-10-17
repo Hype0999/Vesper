@@ -14,10 +14,10 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Set up Node.js LTS
+    - name: Set up Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: 20
+        node-version: 22
         cache: 'npm'
 
     - name: Install dependencies
@@ -28,3 +28,6 @@ jobs:
 
     - name: Run automated test suite
       run: npm test
+      env:
+        NODE_ENV: test
+        SESSION_SECRET: ci_test_session_secret_0123456789abcdef0123456789abcdef

@@ -17,9 +17,23 @@ const envSchema = z.object({
   HOST: z.string().default('0.0.0.0'),
   STORAGE_DIR: z.string().default('./storage'),
   DATABASE_PATH: z.string().optional(),
-  SESSION_SECRET: z.string().min(32, 'SESSION_SECRET must be at least 32 characters long'),
+  SESSION_SECRET: z.string().min(32, 'SESSION_SECRET must be at least 32 characters long').optional(),
   ALLOWED_ORIGINS: z.string().default('http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://raspberrypi.local:3000,http://travelhub.local:3000'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+}).transform((data) => {
+  let sessionSecret = data.SESSION_SECRET;
+  if (!sessionSecret) {
+    if (data.NODE_ENV === 'production') {
+      throw new Error('SESSION_SECRET is required in production and must be at least 32 characters long');
+    }
+    sessionSecret = data.NODE_ENV === 'test'
+      ? 'test_session_secret_0123456789abcdef0123456789abcdef'
+      : 'dev_session_secret_0123456789abcdef0123456789abcdef';
+  }
+  return {
+    ...data,
+    SESSION_SECRET: sessionSecret,
+  };
 });
 
 const parsed = envSchema.safeParse(process.env);
