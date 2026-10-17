@@ -1,0 +1,33 @@
+{
+  "name": "vesper-sanctuary",
+  "version": "1.0.0",
+  "description": "Vesper — Ultra-Reliable, Zero-Transcode Private Offline Travel Media Sanctuary & Vault by Kartikeya Saini",
+  "private": true,
+  "workspaces": [
+    "shared",
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "build": "npm --prefix shared run build && npm --prefix client run build && npm --prefix server run build",
+    "build:shared": "npm --prefix shared run build",
+    "build:client": "npm --prefix client run build",
+    "build:server": "npm --prefix server run build",
+    "dev": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "start": "npm --prefix server run start",
+    "test": "npm --prefix server run test",
+    "reset-password": "node scripts/reset-password.mjs"
+  },
+  "keywords": [
+    "self-hosted",
+    "media-hub",
+    "privacy",
+    "vault",
+    "raspberry-pi",
+    "mobile-first",
+    "travel-hub"
+  ],
+  "author": "Kartikeya Saini",
+  "license": "AGPL-3.0"
+}

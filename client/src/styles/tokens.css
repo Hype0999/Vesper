@@ -1,0 +1,128 @@
+:root {
+  /* Big Tech Luxury Dark Palette (Apple Pro / Spotify / YouTube / Google Photos) */
+  --bg-app: #0a0b0d;
+  --bg-surface: #121417;
+  --bg-surface-elevated: #181b20;
+  --bg-surface-hover: #22262d;
+  --bg-subtle: #0e1013;
+
+  /* Glassmorphism Tokens */
+  --glass-bg: rgba(18, 20, 23, 0.85);
+  --glass-bg-elevated: rgba(24, 27, 32, 0.92);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-border-hover: rgba(255, 255, 255, 0.16);
+  --glass-blur: blur(20px) saturate(180%);
+
+  /* Subtle, crisp border system */
+  --border-subtle: rgba(255, 255, 255, 0.07);
+  --border-default: rgba(255, 255, 255, 0.12);
+  --border-strong: rgba(255, 255, 255, 0.22);
+  --border-focus: rgba(255, 255, 255, 0.45);
+
+  /* Typography Colors */
+  --text-primary: #ffffff;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --text-inverse: #0a0b0d;
+
+  /* Vesper Luxury Monolith Accent (Titanium & Platinum) */
+  --brand-primary: #ffffff;
+  --brand-secondary: #94a3b8;
+  --brand-titanium: #cbd5e1;
+  --brand-gradient: linear-gradient(135deg, #ffffff 0%, #cbd5e1 50%, #94a3b8 100%);
+  --brand-gradient-hover: linear-gradient(135deg, #ffffff 0%, #e2e8f0 50%, #cbd5e1 100%);
+  --brand-glow: 0 0 24px rgba(255, 255, 255, 0.18);
+
+  /* Spotify Ecosystem Suite (Music & Songs) */
+  --spotify-green: #1ed760;
+  --spotify-green-hover: #1fdf64;
+  --spotify-dark: #121212;
+  --spotify-card: #181818;
+  --spotify-card-hover: #242424;
+  --spotify-subtext: #b3b3b3;
+  --spotify-glow: 0 4px 20px rgba(30, 215, 96, 0.4);
+
+  /* YouTube Ecosystem Suite (Videos & Movies) */
+  --youtube-red: #ff0000;
+  --youtube-red-hover: #cc0000;
+  --youtube-dark: #0f0f0f;
+  --youtube-card: #181818;
+  --youtube-card-hover: #222222;
+  --youtube-badge: rgba(0, 0, 0, 0.85);
+
+  /* Google Photos Ecosystem Suite (Photos & Lightbox) */
+  --gphotos-dark: #202124;
+  --gphotos-surface: #303134;
+  --gphotos-blue: #8ab4f8;
+  --gphotos-pill: #3c4043;
+  --gphotos-pill-hover: #4a4e51;
+
+  /* Hardware Guardian & Thermal Protection */
+  --guardian-nominal: #10b981;
+  --guardian-nominal-subtle: rgba(16, 185, 129, 0.12);
+  --guardian-elevated: #f59e0b;
+  --guardian-elevated-subtle: rgba(245, 158, 11, 0.15);
+  --guardian-critical: #ef4444;
+  --guardian-critical-subtle: rgba(239, 68, 68, 0.2);
+
+  /* Functional Accents */
+  --accent-white: #ffffff;
+  --accent-blue: #3b82f6;
+  --accent-blue-hover: #2563eb;
+  --accent-success: #10b981;
+  --accent-success-subtle: rgba(16, 185, 129, 0.12);
+  --accent-warning: #f59e0b;
+  --accent-danger: #f43f5e;
+  --accent-danger-subtle: rgba(244, 63, 94, 0.12);
+
+  /* Vault Theme (Warm Amber / Gold Sanctuary) */
+  --vault-primary: #f59e0b;
+  --vault-gradient: linear-gradient(135deg, #fbbf24 0%, #f59e0b 60%, #d97706 100%);
+  --vault-subtle: rgba(245, 158, 11, 0.12);
+  --vault-border: rgba(245, 158, 11, 0.35);
+  --vault-glow: 0 0 28px rgba(245, 158, 11, 0.3);
+
+  /* Spacing */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+
+  /* Touch Targets (Mobile Ergonomics) */
+  --touch-target: 44px;
+  --touch-target-sm: 36px;
+
+  /* Radii */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-full: 9999px;
+
+  /* Ambient Deep Shadows */
+  --shadow-subtle: 0 1px 3px rgba(0, 0, 0, 0.5);
+  --shadow-card: 0 8px 24px -4px rgba(0, 0, 0, 0.65), 0 2px 6px -1px rgba(0, 0, 0, 0.4);
+  --shadow-elevated: 0 20px 48px -8px rgba(0, 0, 0, 0.85), 0 6px 12px -2px rgba(0, 0, 0, 0.6);
+  --shadow-glow: 0 0 24px -4px rgba(255, 255, 255, 0.12);
+
+  /* Transitions & Physics */
+  --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 400ms;
+
+  /* Z-Index Hierarchy */
+  --z-nav: 50;
+  --z-bottom-nav: 60;
+  --z-audio-player: 70;
+  --z-modal: 100;
+  --z-player-modal: 120;
+  --z-toast: 150;
+}

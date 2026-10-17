@@ -1,0 +1,16 @@
+[Unit]
+Description=Vesper Sanctuary Auto-Hotspot Travel Failover
+Documentation=https://github.com/vesper-sanctuary
+After=NetworkManager.service
+Wants=NetworkManager.service
+Before=vesper.service travelhub.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/vesper-autohotspot.sh
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

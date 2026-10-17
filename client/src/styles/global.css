@@ -1,0 +1,357 @@
+@import './tokens.css';
+@import './typography.css';
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Subtle, smooth native scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-full);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Touch & tap ergonomics */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+/* App Container */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: var(--space-4);
+  /* Safe area for mobile bottom bar + home indicator */
+  padding-bottom: calc(88px + env(safe-area-inset-bottom));
+}
+
+@media (min-width: 768px) {
+  .app-container {
+    padding: var(--space-6) var(--space-8);
+    padding-bottom: calc(var(--space-8) + env(safe-area-inset-bottom));
+  }
+}
+
+/* Glassmorphism Surface Components */
+.card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-card);
+  transition: all var(--duration-normal) var(--ease-spring);
+  position: relative;
+  overflow: hidden;
+}
+
+.card:hover {
+  border-color: var(--border-default);
+  box-shadow: var(--shadow-elevated);
+}
+
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+}
+
+/* Inputs */
+.input,
+.input-field {
+  width: 100%;
+  min-height: var(--touch-target);
+  padding: 0.75rem 1rem;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-family: inherit;
+  transition: all var(--duration-fast) var(--ease-spring);
+  outline: none;
+}
+
+.input:focus,
+.input-field:focus {
+  border-color: var(--border-focus);
+  background: var(--bg-surface-hover);
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.18);
+}
+
+.input::placeholder,
+.input-field::placeholder {
+  color: var(--text-muted);
+}
+
+/* Tactile Buttons with Micro-Physics */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--touch-target);
+  padding: 0.65rem 1.15rem;
+  font-size: 0.88rem;
+  font-weight: 500;
+  font-family: inherit;
+  letter-spacing: -0.01em;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-spring);
+  text-decoration: none;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.btn:active {
+  transform: scale(0.965);
+}
+
+.btn-primary {
+  background: #ffffff;
+  color: #0a0b0d;
+  font-weight: 600;
+  box-shadow: 0 2px 10px rgba(255, 255, 255, 0.12);
+}
+
+.btn-primary:hover {
+  background: #f1f2f6;
+  box-shadow: 0 4px 16px rgba(255, 255, 255, 0.2);
+}
+
+.btn-brand {
+  background: linear-gradient(135deg, #ffffff 0%, #e2e8f0 60%, #cbd5e1 100%);
+  color: #0a0b0d;
+  font-weight: 600;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 2px 12px rgba(255, 255, 255, 0.12);
+}
+
+.btn-brand:hover {
+  background: #ffffff;
+  box-shadow: 0 4px 20px rgba(255, 255, 255, 0.22);
+  transform: translateY(-1px);
+}
+
+.btn-spotify {
+  background: var(--spotify-green);
+  color: #000000;
+  font-weight: 700;
+  border-radius: var(--radius-full);
+  box-shadow: var(--spotify-glow);
+}
+
+.btn-spotify:hover {
+  background: var(--spotify-green-hover);
+  box-shadow: 0 6px 24px rgba(30, 215, 96, 0.5);
+  transform: scale(1.03);
+}
+
+.btn-youtube {
+  background: var(--youtube-red);
+  color: #ffffff;
+  font-weight: 600;
+  border-radius: var(--radius-full);
+}
+
+.btn-youtube:hover {
+  background: var(--youtube-red-hover);
+  box-shadow: 0 4px 16px rgba(255, 0, 0, 0.4);
+}
+
+.btn-secondary {
+  background: var(--bg-surface-elevated);
+  color: var(--text-primary);
+  border-color: var(--border-default);
+}
+
+.btn-secondary:hover {
+  background: var(--bg-surface-hover);
+  border-color: var(--border-strong);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.btn-ghost:hover {
+  color: var(--text-primary);
+  background: var(--bg-surface-elevated);
+}
+
+/* Badges */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-radius: var(--radius-full);
+  background: var(--bg-surface-elevated);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+}
+
+.badge-brand {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.badge-spotify {
+  background: rgba(30, 215, 96, 0.15);
+  color: var(--spotify-green);
+  border-color: rgba(30, 215, 96, 0.35);
+}
+
+.badge-youtube {
+  background: rgba(255, 0, 0, 0.15);
+  color: #ff4d4d;
+  border-color: rgba(255, 0, 0, 0.3);
+}
+
+.badge-vault {
+  background: var(--vault-subtle);
+  color: var(--vault-primary);
+  border-color: var(--vault-border);
+}
+
+.badge-success {
+  background: var(--accent-success-subtle);
+  color: var(--accent-success);
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.badge-warning {
+  background: var(--guardian-elevated-subtle);
+  color: var(--guardian-elevated);
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
+.badge-danger {
+  background: var(--guardian-critical-subtle);
+  color: var(--guardian-critical);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 250ms var(--ease-spring) forwards;
+}
+
+.animate-slide-up {
+  animation: slideUp 300ms var(--ease-spring) forwards;
+}
+
+.animate-scale-in {
+  animation: scaleIn 250ms var(--ease-spring) forwards;
+}
+
+/* Responsive visibility utilities */
+@media (max-width: 767px) {
+  .hide-on-mobile {
+    display: none !important;
+  }
+}
+
+@media (min-width: 768px) {
+  .hide-on-desktop {
+    display: none !important;
+  }
+}
+
+/* Docked Audio Bar responsive positioning */
+.docked-audio-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: var(--z-audio-player);
+  transition: bottom 0.25s var(--ease-spring);
+}
+
+@media (max-width: 767px) {
+  .docked-audio-bar {
+    bottom: calc(56px + env(safe-area-inset-bottom));
+  }
+}

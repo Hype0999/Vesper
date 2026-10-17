@@ -1,0 +1,55 @@
+# Dependencies & Build Artefacts
+node_modules/
+dist/
+build/
+.cache/
+*.tsbuildinfo
+
+# Environment & Secrets (NEVER COMMIT)
+.env
+.env.local
+.env.production
+.env.test
+
+# Storage, Uploads, Databases & Cryptographic Vault (NEVER COMMIT PERSONAL MEDIA)
+storage/media/normal/*
+!storage/media/normal/.gitkeep
+storage/media/private/*
+!storage/media/private/.gitkeep
+storage/thumbnails/normal/*
+!storage/thumbnails/normal/.gitkeep
+storage/thumbnails/private/*
+!storage/thumbnails/private/.gitkeep
+storage/database/*
+!storage/database/.gitkeep
+storage/temp/*
+!storage/temp/.gitkeep
+storage/test-database/
+storage/test-storage/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.enc
+
+# IDE, OS & System Generated Files
+.DS_Store
+Thumbs.db
+Desktop.ini
+.vscode/
+.idea/
+.system_generated/
+.tempmediaStorage/
+scratch/
+
+# Logs & Diagnostics
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Test Coverage
+coverage/

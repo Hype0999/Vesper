@@ -1,0 +1,17 @@
+{
+  "name": "@media-hub/shared",
+  "version": "0.1.0",
+  "description": "Shared Zod schemas, types, and contracts for Private Media Hub",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4"
+  }
+}
