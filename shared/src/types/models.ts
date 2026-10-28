@@ -107,3 +107,68 @@ export interface SystemHealth {
     thermalWarning?: string | null;
   };
 }
+
+export interface ConnectedDrive {
+  id: string;
+  name: string;
+  mountPath: string;
+  label: string;
+  totalBytes: number;
+  freeBytes: number;
+  isRemovable: boolean;
+  fileSystem?: string;
+}
+
+export interface DiscoveredMediaFile {
+  filePath: string;
+  fileName: string;
+  fileSize: number;
+  type: MediaType;
+  extension: string;
+  mimeType: string;
+  parentDir: string;
+}
+
+export interface DriveScanResult {
+  drivePath: string;
+  scannedCount: number;
+  mediaFiles: DiscoveredMediaFile[];
+  summary: {
+    totalCount: number;
+    videoCount: number;
+    audioCount: number;
+    photoCount: number;
+    totalBytes: number;
+  };
+}
+
+export interface MediaIngestResult {
+  importedCount: number;
+  failedCount: number;
+  items: Array<{
+    filePath: string;
+    title: string;
+    status: 'success' | 'error';
+    mediaId?: string;
+    error?: string;
+  }>;
+}
+
+export interface AdminTelemetry {
+  system: SystemHealth;
+  activeSessionsCount: number;
+  mediaStats: {
+    totalCount: number;
+    publicCount: number;
+    vaultCount: number;
+    videoCount: number;
+    audioCount: number;
+    photoCount: number;
+    totalStorageBytes: number;
+  };
+  storage: {
+    mediaDir: string;
+    vaultDir: string;
+    tempDirSizeMb: number;
+  };
+}

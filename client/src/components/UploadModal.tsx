@@ -30,6 +30,10 @@ interface QueuedFile {
   type: 'video' | 'audio' | 'photo';
   status: 'pending' | 'uploading' | 'completed' | 'error';
   progress: number;
+  bytesLoaded?: number;
+  totalBytes?: number;
+  speed?: string;
+  statusText?: string;
   errorMessage?: string;
 }
 
@@ -153,6 +157,155 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     setFileQueue((prev) => prev.filter((item) => item.id !== id));
   };
 
+  const uploadSingleItemWithProgress = (
+    item: QueuedFile,
+    index: number
+  ): Promise<{ success: boolean; media?: MediaItem; error?: string }> => {
+    return new Promise((resolve) => {
+      const xhr = new XMLHttpRequest();
+      let lastLoaded = 0;
+      let lastTime = Date.now();
+
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable && e.total > 0) {
+          const percent = Math.min(99, Math.round((e.loaded / e.total) * 100));
+          const now = Date.now();
+          const timeDiff = (now - lastTime) / 1000;
+          let speedStr = item.speed;
+
+          if (timeDiff >= 0.25) {
+            const bytesDiff = e.loaded - lastLoaded;
+            const bytesPerSec = bytesDiff / timeDiff;
+            if (bytesPerSec >= 1024 * 1024) {
+              speedStr = `${(bytesPerSec / (1024 * 1024)).toFixed(1)} MB/s`;
+            } else {
+              speedStr = `${Math.round(bytesPerSec / 1024)} KB/s`;
+            }
+            lastLoaded = e.loaded;
+            lastTime = now;
+          }
+
+          setFileQueue((prev) =>
+            prev.map((q, idx) =>
+              idx === index
+                ? {
+                    ...q,
+                    status: 'uploading',
+                    progress: percent,
+                    bytesLoaded: e.loaded,
+                    totalBytes: e.total,
+                    speed: speedStr,
+                    statusText: `Uploading: ${percent}% (${formatFileSize(e.loaded)} / ${formatFileSize(e.total)})${speedStr ? ` • ${speedStr}` : ''}`,
+                  }
+                : q
+            )
+          );
+        }
+      });
+
+      // When all request bytes are sent to server, update status to processing
+      xhr.upload.addEventListener('load', () => {
+        setFileQueue((prev) =>
+          prev.map((q, idx) =>
+            idx === index
+              ? {
+                  ...q,
+                  progress: 100,
+                  statusText: isPrivate
+                    ? 'Encrypting file with AES-256-CTR...'
+                    : 'Processing & extracting album art / video poster...',
+                }
+              : q
+          )
+        );
+      });
+
+      xhr.addEventListener('load', () => {
+        try {
+          const json: ApiResponse<{ media: MediaItem }> = JSON.parse(xhr.responseText);
+          if (xhr.status >= 200 && xhr.status < 300 && json.success) {
+            setFileQueue((prev) =>
+              prev.map((q, idx) =>
+                idx === index
+                  ? {
+                      ...q,
+                      status: 'completed',
+                      progress: 100,
+                      statusText: '100% Upload Complete',
+                    }
+                  : q
+              )
+            );
+            resolve({ success: true, media: json.data.media });
+          } else {
+            const msg = !json.success ? json.error.message : `Upload failed (status ${xhr.status})`;
+            setFileQueue((prev) =>
+              prev.map((q, idx) =>
+                idx === index
+                  ? {
+                      ...q,
+                      status: 'error',
+                      errorMessage: msg,
+                      statusText: 'Upload failed',
+                    }
+                  : q
+              )
+            );
+            resolve({ success: false, error: msg });
+          }
+        } catch {
+          const msg = 'Invalid server response';
+          setFileQueue((prev) =>
+            prev.map((q, idx) =>
+              idx === index
+                ? {
+                    ...q,
+                    status: 'error',
+                    errorMessage: msg,
+                    statusText: 'Upload failed',
+                  }
+                : q
+            )
+          );
+          resolve({ success: false, error: msg });
+        }
+      });
+
+      xhr.addEventListener('error', () => {
+        const msg = 'Network error during upload';
+        setFileQueue((prev) =>
+          prev.map((q, idx) =>
+            idx === index
+              ? {
+                  ...q,
+                  status: 'error',
+                  errorMessage: msg,
+                  statusText: 'Network connection lost',
+                }
+              : q
+          )
+        );
+        resolve({ success: false, error: msg });
+      });
+
+      const qParams = new URLSearchParams();
+      qParams.set('title', item.title.trim() || item.file.name);
+      if (categoryId) qParams.set('categoryId', categoryId);
+      if (isPrivate) qParams.set('isPrivate', 'true');
+
+      const formData = new FormData();
+      formData.append('title', item.title.trim() || item.file.name);
+      if (categoryId) formData.append('categoryId', categoryId);
+      formData.append('isPrivate', isPrivate ? 'true' : 'false');
+      if (tags.trim()) formData.append('tags', tags.trim());
+      formData.append('file', item.file);
+
+      xhr.open('POST', `/api/media/upload?${qParams.toString()}`);
+      xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+      xhr.send(formData);
+    });
+  };
+
   const startBatchUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (fileQueue.length === 0) {
@@ -181,54 +334,18 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 
     let lastUploadedMedia: MediaItem | null = null;
 
-    // Process files sequentially to ensure 0-failure on low-resource Raspberry Pi 4
+    // Process files sequentially with real-time percentage progress
     for (let i = 0; i < fileQueue.length; i++) {
       const item = fileQueue[i];
       if (!item || item.status === 'completed') continue;
 
       setFileQueue((prev) =>
-        prev.map((q, idx) => (idx === i ? { ...q, status: 'uploading', progress: 20 } : q))
+        prev.map((q, idx) => (idx === i ? { ...q, status: 'uploading', progress: 0, statusText: 'Starting upload...' } : q))
       );
 
-      const formData = new FormData();
-      formData.append('title', item.title.trim() || item.file.name);
-      if (categoryId) formData.append('categoryId', categoryId);
-      formData.append('isPrivate', isPrivate ? 'true' : 'false');
-      if (tags.trim()) formData.append('tags', tags.trim());
-      formData.append('file', item.file);
-
-      const qParams = new URLSearchParams();
-      qParams.set('title', item.title.trim() || item.file.name);
-      if (categoryId) qParams.set('categoryId', categoryId);
-      if (isPrivate) qParams.set('isPrivate', 'true');
-
-      try {
-        const res = await fetch(`/api/media/upload?${qParams.toString()}`, {
-          method: 'POST',
-          headers: {
-            'X-Requested-With': 'XMLHttpRequest',
-          },
-          body: formData,
-        });
-
-        const json: ApiResponse<{ media: MediaItem }> = await res.json();
-        if (res.ok && json.success) {
-          lastUploadedMedia = json.data.media;
-          setFileQueue((prev) =>
-            prev.map((q, idx) => (idx === i ? { ...q, status: 'completed', progress: 100 } : q))
-          );
-        } else {
-          const msg = !json.success ? json.error.message : 'Upload failed';
-          setFileQueue((prev) =>
-            prev.map((q, idx) => (idx === i ? { ...q, status: 'error', errorMessage: msg } : q))
-          );
-        }
-      } catch (err) {
-        setFileQueue((prev) =>
-          prev.map((q, idx) =>
-            idx === i ? { ...q, status: 'error', errorMessage: 'Network or server error' } : q
-          )
-        );
+      const result = await uploadSingleItemWithProgress(item, i);
+      if (result.success && result.media) {
+        lastUploadedMedia = result.media;
       }
     }
 
@@ -237,7 +354,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       onUploadSuccess(lastUploadedMedia);
       setTimeout(() => {
         onClose();
-      }, 600);
+      }, 700);
     }
   };
 
@@ -392,84 +509,199 @@ export const UploadModal: React.FC<UploadModalProps> = ({
             </p>
           </div>
 
-          {/* Selected File Queue List */}
-          {fileQueue.length > 0 && (
-            <div style={{ marginBottom: 'var(--space-4)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                  Upload Queue ({fileQueue.length} files)
-                </span>
-                {isUploading && (
-                  <span style={{ fontSize: '0.75rem', color: '#a78bfa', fontWeight: 500 }}>
-                    Uploaded {completedCount} / {fileQueue.length}
+          {/* Selected File Queue List with Live Percentage Progress */}
+          {fileQueue.length > 0 && (() => {
+            const totalQueueBytes = fileQueue.reduce((acc, f) => acc + f.file.size, 0);
+            const totalUploadedBytes = fileQueue.reduce((acc, f) => {
+              if (f.status === 'completed') return acc + f.file.size;
+              if (f.status === 'uploading') return acc + (f.bytesLoaded || 0);
+              return acc;
+            }, 0);
+            const aggregatePercent = totalQueueBytes > 0 ? Math.min(100, Math.round((totalUploadedBytes / totalQueueBytes) * 100)) : 0;
+
+            return (
+              <div style={{ marginBottom: 'var(--space-4)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                    Upload Queue ({fileQueue.length} files)
                   </span>
-                )}
-              </div>
-              <div
-                style={{
-                  maxHeight: '160px',
-                  overflowY: 'auto',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-sm)',
-                  background: 'var(--bg-surface-elevated)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '1px',
-                }}
-              >
-                {fileQueue.map((item) => (
+                  {isUploading && (
+                    <span style={{ fontSize: '0.75rem', color: '#a78bfa', fontWeight: 600 }}>
+                      Uploaded {completedCount} of {fileQueue.length} files
+                    </span>
+                  )}
+                </div>
+
+                {/* Aggregate Global Progress Bar */}
+                {isUploading && (
                   <div
-                    key={item.id}
                     style={{
+                      padding: '8px 12px',
+                      background: 'rgba(56, 189, 248, 0.08)',
+                      border: '1px solid rgba(56, 189, 248, 0.25)',
+                      borderRadius: 'var(--radius-sm)',
+                      marginBottom: '8px',
                       display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '6px 10px',
-                      background: 'var(--bg-surface)',
-                      borderBottom: '1px solid var(--border-subtle)',
-                      fontSize: '0.8rem',
+                      flexDirection: 'column',
+                      gap: '4px',
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
-                      {item.type === 'video' && <Film size={14} style={{ color: '#ff3b3b', flexShrink: 0 }} />}
-                      {item.type === 'audio' && <Music size={14} style={{ color: '#8b5cf6', flexShrink: 0 }} />}
-                      {item.type === 'photo' && <ImageIcon size={14} style={{ color: '#38bdf8', flexShrink: 0 }} />}
-                      <span
-                        style={{
-                          color: 'var(--text-primary)',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          maxWidth: '220px',
-                        }}
-                      >
-                        {item.title}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#38bdf8' }}>
+                        Total Upload Progress: {aggregatePercent}%
                       </span>
-                      <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>
-                        ({formatFileSize(item.file.size)})
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                        {formatFileSize(totalUploadedBytes)} / {formatFileSize(totalQueueBytes)}
                       </span>
                     </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      {item.status === 'pending' && <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>Queued</span>}
-                      {item.status === 'uploading' && <span style={{ color: '#8b5cf6', fontSize: '0.72rem', fontWeight: 600 }}>Uploading...</span>}
-                      {item.status === 'completed' && <CheckCircle2 size={15} style={{ color: 'var(--accent-success)' }} />}
-                      {item.status === 'error' && <AlertCircle size={15} style={{ color: 'var(--accent-danger)' }} />}
-                      {!isUploading && item.status !== 'completed' && (
-                        <button
-                          type="button"
-                          onClick={() => removeFileFromQueue(item.id)}
-                          style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0 }}
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      )}
+                    <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
+                      <div
+                        style={{
+                          height: '100%',
+                          width: `${aggregatePercent}%`,
+                          background: 'linear-gradient(90deg, #38bdf8, #818cf8, #10b981)',
+                          transition: 'width 200ms ease-out',
+                        }}
+                      />
                     </div>
                   </div>
-                ))}
+                )}
+
+                <div
+                  style={{
+                    maxHeight: '190px',
+                    overflowY: 'auto',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: 'var(--radius-sm)',
+                    background: 'var(--bg-surface-elevated)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '1px',
+                  }}
+                >
+                  {fileQueue.map((item) => (
+                    <div
+                      key={item.id}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        padding: '8px 12px',
+                        background: 'var(--bg-surface)',
+                        borderBottom: '1px solid var(--border-subtle)',
+                        fontSize: '0.8rem',
+                        gap: '6px',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
+                          {item.type === 'video' && <Film size={14} style={{ color: '#ff3b3b', flexShrink: 0 }} />}
+                          {item.type === 'audio' && <Music size={14} style={{ color: '#8b5cf6', flexShrink: 0 }} />}
+                          {item.type === 'photo' && <ImageIcon size={14} style={{ color: '#38bdf8', flexShrink: 0 }} />}
+                          <span
+                            style={{
+                              color: 'var(--text-primary)',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              maxWidth: '220px',
+                              fontWeight: 500,
+                            }}
+                          >
+                            {item.title}
+                          </span>
+                          <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>
+                            ({formatFileSize(item.file.size)})
+                          </span>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                          {item.status === 'pending' && (
+                            <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: '4px' }}>
+                              Queued
+                            </span>
+                          )}
+                          {item.status === 'uploading' && (
+                            <span
+                              style={{
+                                color: '#38bdf8',
+                                fontSize: '0.75rem',
+                                fontWeight: 700,
+                                background: 'rgba(56, 189, 248, 0.12)',
+                                padding: '2px 8px',
+                                borderRadius: '12px',
+                                border: '1px solid rgba(56, 189, 248, 0.3)',
+                              }}
+                            >
+                              {item.progress}%
+                            </span>
+                          )}
+                          {item.status === 'completed' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--accent-success)', fontSize: '0.75rem', fontWeight: 600 }}>
+                              <CheckCircle2 size={14} />
+                              <span>Done</span>
+                            </div>
+                          )}
+                          {item.status === 'error' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--accent-danger)', fontSize: '0.72rem' }}>
+                              <AlertCircle size={14} />
+                              <span>{item.errorMessage || 'Error'}</span>
+                            </div>
+                          )}
+                          {!isUploading && item.status !== 'completed' && (
+                            <button
+                              type="button"
+                              onClick={() => removeFileFromQueue(item.id)}
+                              style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0 }}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Real-time Percentage & Progress Bar */}
+                      {item.status === 'uploading' && (
+                        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem' }}>
+                            <span style={{ color: 'var(--text-secondary)' }}>
+                              {item.statusText || `Uploading ${item.progress}%`}
+                            </span>
+                            <span style={{ color: '#38bdf8', fontWeight: 700 }}>
+                              {item.progress}%
+                            </span>
+                          </div>
+                          <div
+                            style={{
+                              width: '100%',
+                              height: '5px',
+                              background: 'rgba(255,255,255,0.08)',
+                              borderRadius: '3px',
+                              overflow: 'hidden',
+                            }}
+                          >
+                            <div
+                              style={{
+                                height: '100%',
+                                width: `${item.progress}%`,
+                                background: isPrivate
+                                  ? 'linear-gradient(90deg, #f59e0b, #ec4899)'
+                                  : 'linear-gradient(90deg, #3b82f6, #06b6d4, #10b981)',
+                                borderRadius: '3px',
+                                transition: 'width 150ms ease-out',
+                                boxShadow: isPrivate
+                                  ? '0 0 10px rgba(245, 158, 11, 0.4)'
+                                  : '0 0 10px rgba(56, 189, 248, 0.4)',
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Form Options */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>

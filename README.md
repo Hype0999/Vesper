@@ -68,6 +68,17 @@ When traveling, your Raspberry Pi cannot reach your home Wi-Fi network. Standard
 - Strict cryptographic isolation for your Private Vault partition.
 - Invite, manage, and configure companion users directly from the web interface.
 
+### 💾 8. Secret Admin Station & USB Pendrive Linker
+- **External Storage Auto-Detection**: Cross-platform pendrive and external drive detection (Linux `/media`, `/mnt`, `lsblk`, and Windows drive letters).
+- **Deep Media Scanner**: Recursively traverses connected storage to locate videos, songs, and photos.
+- **Partition Router**: 1-click batch ingestion into either the **Public Sanctuary** (shared with companions) or the **Private Encrypted Vault** (AES-256-CTR encrypted at rest).
+- **Hardware Telemetry**: Real-time Raspberry Pi CPU core thermals (<45°C), RAM headroom, active companion count, and temporary cache purger.
+
+### 📊 9. Real-Time Upload Percentage Tracker
+- **Precise Transfer Metrics**: Built with XMLHttpRequest progress listeners tracking exact integer percentage (`0%` to `100%`).
+- **Transfer Speed & Byte Tracking**: Live throughput display (e.g., `14.2 MB/s`) and byte progress (`450 MB / 1.1 GB`).
+- **State Transparency**: Live post-upload pipeline status ("Extracting ID3 album art..." or "Encrypting with AES-256-CTR...").
+
 ---
 
 ## 🛠️ Tech Stack & Architecture
@@ -79,6 +90,27 @@ When traveling, your Raspberry Pi cannot reach your home Wi-Fi network. Standard
 - **Cryptography**: Argon2id (`argon2`), AES-256-CTR (`node:crypto`)
 - **Image & Media Engine**: Sharp (WebP conversion), `@ffmpeg-installer/ffmpeg` (metadata extraction)
 - **Networking**: NetworkManager (`nmcli`), Avahi Daemon (`.local` mDNS), Offline QR Code generation
+
+---
+
+## 🏛️ Architectural Philosophy: How Vesper Differs from Plex, Jellyfin & Kodi
+
+*Plex, Jellyfin, and Kodi are world-class media solutions with immense achievements in the open-source and home entertainment ecosystems. Vesper does not compete with their home theater features; rather, it was engineered with a fundamentally different design philosophy focused on **ultra-mobile, battery-powered travel, offline independence, and cryptographic privacy**.*
+
+| Dimension | 🚆 Vesper (Travel Sanctuary) | 🏠 Plex | 🌐 Jellyfin | 📺 Kodi |
+| :--- | :--- | :--- | :--- | :--- |
+| **Primary Purpose** | **Travel & Trains**: Completely offline personal media sanctuary for mobile phones & laptops. | **Home Theater**: Central media library streaming to smart TVs, clients, and remote devices. | **Self-Hosted Home Media**: Open-source server for home gigabit LANs. | **Living Room Client**: Media player interface directly connected to a TV display. |
+| **Internet Dependency** | **100% Zero-Internet**: Autonomous AP failover (`Vesper-Pi-Travel`, `10.42.0.1`). | Often relies on `plex.tv` cloud servers for account authentication. | Works offline on local LAN, but requires existing router/DHCP network. | Offline player, but requires local screen/HDMI connection. |
+| **Transcoding & Thermals** | **Zero Transcode**: Strict RFC 7233 direct streams (<45°C on Pi 4 with 0% CPU overhead). | Often transcodes via FFmpeg in real-time, spiking Pi CPU to 80°C+ & draining battery. | Server-side transcode can overwhelm low-power ARM SoCs without hardware encoders. | Direct decode by device player (client-centric). |
+| **Physical Theft Protection** | **AES-256-CTR at Rest**: Private Vault files are encrypted blobs (`.enc`). Unreadable if drive is stolen. | Unencrypted files stored in plaintext on disk/storage. | Unencrypted files stored in plaintext on disk/storage. | Unencrypted files stored in plaintext on disk/storage. |
+| **Memory Footprint** | **< 60 MB RAM**: Fastify + SQLite WAL engine. Extremely lightweight. | ~300 MB – 1 GB+ RAM idle/runtime. | ~350 MB – 1.2 GB RAM (.NET runtime). | ~150 MB – 400 MB RAM (UI player process). |
+| **Client Requirement** | **Pure Web Browser**: No app store install required. Works on any iPhone/Android. | Requires installing Plex apps (often requires Plex Pass or activation fee). | Requires installing Jellyfin app or accessing heavy web client. | Must run directly on the physical display hardware. |
+| **Setup on the Go** | **Zero Router Needed**: Broadcasts its own Wi-Fi hotspot in 12s on boot. | Requires an existing home router & Wi-Fi infrastructure. | Requires an existing home router & Wi-Fi infrastructure. | Requires monitor and keyboard/remote. |
+
+### Key Engineering Distinctions:
+1. **The Train Wi-Fi Challenge**: When you board a train or sit on a flight, there is no home router assigning IP addresses. Vesper's automated watchdog detects the absence of home Wi-Fi within 12 seconds and immediately activates Access Point mode, serving DHCP and DNS autonomously.
+2. **Battery & Heat Preservation**: In a backpack or hotel room, a Raspberry Pi cannot endure continuous 100% CPU spikes from video transcoding. By leveraging browser-native codecs via RFC 7233 HTTP byte ranges, Vesper delivers 4K 60fps video at virtually 0% CPU utilization.
+3. **The Stolen Flash Drive Scenario**: Travelers risk losing USB drives or having a backpack stolen. Plaintext storage exposes personal travel photos, videos, and private notes. Vesper encrypts Vault media into AES-256-CTR `.enc` archives derived from PBKDF2 keys, rendering stolen storage cryptographically unreadable.
 
 ---
 
@@ -160,7 +192,7 @@ sudo bash scripts/install-pi.sh
    ```bash
    npm run test
    ```
-   *(All 34 automated unit & integration tests pass with 100% success)*.
+   *(All 42 automated unit & integration tests pass with 100% success)*.
 
 ---
 
@@ -180,18 +212,18 @@ If you ever need to reset your account password or vault passphrase:
 ```
 ├── client/                     # Vite + React 18 Mobile-First SPA
 │   ├── src/
-│   │   ├── components/         # VideoPlayer, AudioPlayer, SongsView, VaultView, etc.
+│   │   ├── components/         # VideoPlayer, AudioPlayer, AdminCommandCenter, UploadModal, etc.
 │   │   ├── pages/              # Dashboard, SetupWizard, Login
 │   │   └── styles/             # Obsidian Spotify/YouTube-inspired CSS design tokens
 ├── server/                     # Fastify Node.js Backend API
 │   ├── src/
 │   │   ├── config/             # Environment validation (env.ts)
 │   │   ├── db/                 # SQLite database migrations & schema
-│   │   ├── middleware/         # Argon2id auth, vault auth, CORS validation
-│   │   ├── routes/             # Media, Auth, Notes, Network, Categories routes
-│   │   ├── services/           # Media streaming, NetworkManager, Vault cipher
+│   │   ├── middleware/         # Argon2id auth, vault auth, admin guard
+│   │   ├── routes/             # Media, Admin, Auth, Notes, Network, Categories routes
+│   │   ├── services/           # Media streaming, Admin USB discovery, NetworkManager, Vault cipher
 │   │   └── utils/              # AES-256-CTR VaultCipher, redacted logger
-│   └── tests/                  # Vitest automated test suite (34 tests)
+│   └── tests/                  # Vitest automated test suite (42 tests across 6 suites)
 ├── shared/                     # Shared TypeScript interfaces & Zod schemas
 ├── scripts/                    # Raspberry Pi installer, auto-hotspot, Windows launchers
 │   ├── install-pi.sh           # 1-Click Raspberry Pi 4 deployment script

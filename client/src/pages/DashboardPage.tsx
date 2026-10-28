@@ -19,6 +19,7 @@ import { AudioPlayerBar } from '../components/AudioPlayerBar';
 import { NetworkSettingsModal } from '../components/NetworkSettingsModal';
 import { UsersModal } from '../components/UsersModal';
 import { HardwareGuardianModal } from '../components/HardwareGuardianModal';
+import { AdminCommandCenterModal } from '../components/AdminCommandCenterModal';
 import { VesperLogo } from '../components/VesperLogo';
 import { MobileBottomNav } from '../components/MobileBottomNav';
 import {
@@ -39,6 +40,7 @@ import {
   Wifi,
   Users,
   ShieldCheck,
+  HardDrive,
 } from 'lucide-react';
 import type { MediaItem, NoteItem, Category } from '@media-hub/shared';
 
@@ -65,6 +67,7 @@ export function DashboardPage() {
   const [isNetworkModalOpen, setIsNetworkModalOpen] = useState<boolean>(false);
   const [isUsersModalOpen, setIsUsersModalOpen] = useState<boolean>(false);
   const [isHardwareGuardianOpen, setIsHardwareGuardianOpen] = useState<boolean>(false);
+  const [isAdminStationOpen, setIsAdminStationOpen] = useState<boolean>(false);
   const [editingNote, setEditingNote] = useState<NoteItem | null>(null);
   const [playingVideo, setPlayingVideo] = useState<MediaItem | null>(null);
   const [viewingPhoto, setViewingPhoto] = useState<MediaItem | null>(null);
@@ -179,7 +182,8 @@ export function DashboardPage() {
     isFactoryResetOpen ||
     isNetworkModalOpen ||
     isUsersModalOpen ||
-    isHardwareGuardianOpen
+    isHardwareGuardianOpen ||
+    isAdminStationOpen
   );
 
   // Mobile Back Button Navigation Guard:
@@ -200,6 +204,7 @@ export function DashboardPage() {
         else if (isNetworkModalOpen) setIsNetworkModalOpen(false);
         else if (isUsersModalOpen) setIsUsersModalOpen(false);
         else if (isHardwareGuardianOpen) setIsHardwareGuardianOpen(false);
+        else if (isAdminStationOpen) setIsAdminStationOpen(false);
         else if (isFactoryResetOpen) setIsFactoryResetOpen(false);
       };
 
@@ -217,6 +222,7 @@ export function DashboardPage() {
     isNetworkModalOpen,
     isUsersModalOpen,
     isHardwareGuardianOpen,
+    isAdminStationOpen,
     isFactoryResetOpen,
   ]);
 
@@ -272,6 +278,15 @@ export function DashboardPage() {
       <HardwareGuardianModal
         isOpen={isHardwareGuardianOpen}
         onClose={() => setIsHardwareGuardianOpen(false)}
+      />
+      <AdminCommandCenterModal
+        isOpen={isAdminStationOpen}
+        onClose={() => setIsAdminStationOpen(false)}
+        categories={categories}
+        onMediaIngested={() => {
+          void fetchMedia();
+          void fetchNotes();
+        }}
       />
       <AudioPlayerBar
         currentTrack={playingAudio}
@@ -460,6 +475,29 @@ export function DashboardPage() {
             <ShieldCheck size={15} style={{ color: '#10b981' }} />
             <span>Guardian</span>
           </button>
+
+          {/* Secret Admin Command Station (Only visible to admin) */}
+          {(user?.role === 'admin' || !user?.role) && (
+            <button
+              className="btn btn-ghost"
+              onClick={() => setIsAdminStationOpen(true)}
+              style={{
+                padding: '0.45rem 0.75rem',
+                fontSize: '0.82rem',
+                color: '#c084fc',
+                border: '1px solid rgba(192, 132, 252, 0.35)',
+                background: 'rgba(139, 92, 246, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                boxShadow: '0 0 10px rgba(139, 92, 246, 0.15)',
+              }}
+              title="Secret Admin Station: Pendrive Linker, Media Ingestion & Hardware Telemetry"
+            >
+              <HardDrive size={15} style={{ color: '#c084fc' }} />
+              <span>Admin Station</span>
+            </button>
+          )}
 
           {/* User badge */}
           <div

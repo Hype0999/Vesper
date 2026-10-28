@@ -26,10 +26,11 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
       id: string;
       username: string;
       password_hash: string;
+      role?: 'admin' | 'member' | 'guest';
     }
 
     const user = db
-      .prepare('SELECT id, username, password_hash FROM users WHERE username = ? COLLATE NOCASE')
+      .prepare('SELECT id, username, password_hash, role FROM users WHERE username = ? COLLATE NOCASE')
       .get(username) as UserRow | undefined;
 
     if (!user) {
@@ -77,6 +78,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
     const userProfile: UserProfile = {
       id: user.id,
       username: user.username,
+      role: user.role ?? 'admin',
     };
 
     return reply.send({

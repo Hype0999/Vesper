@@ -32,12 +32,13 @@ export async function authenticateUser(request: FastifyRequest, reply: FastifyRe
     expires_at: string;
     id: string;
     username: string;
+    role?: 'admin' | 'member' | 'guest';
   }
 
   const row = db
     .prepare(
       `
-      SELECT s.token_hash, s.user_id, s.expires_at, u.id, u.username
+      SELECT s.token_hash, s.user_id, s.expires_at, u.id, u.username, u.role
       FROM sessions s
       JOIN users u ON s.user_id = u.id
       WHERE s.token_hash = ?
@@ -79,6 +80,21 @@ export async function authenticateUser(request: FastifyRequest, reply: FastifyRe
   request.user = {
     id: row.id,
     username: row.username,
+    role: (row.role as 'admin' | 'member' | 'guest') || 'admin',
   };
   request.sessionTokenHash = row.token_hash;
+}
+
+export async function requireAdmin(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await authenticateUser(request, reply);
+  if (reply.sent) return;
+  if (request.user?.role !== 'admin') {
+    return reply.status(403).send({
+      success: false,
+      error: {
+        code: 'FORBIDDEN',
+        message: 'Administrative privileges required for this action.',
+      },
+    } satisfies ApiErrorResponse);
+  }
 }
