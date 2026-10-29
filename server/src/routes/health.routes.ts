@@ -4,6 +4,7 @@ import os from 'node:os';
 import fs from 'node:fs';
 import { env } from '../config/env.js';
 import { getDatabaseService } from '../db/index.js';
+import { requireAdmin } from '../middleware/auth.js';
 
 function getHardwareDiagnostics() {
   let cpuTempC: number | null = null;
@@ -101,8 +102,8 @@ export const healthRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.status(200).send(response);
   });
 
-  // Factory Hard Reset: Wipes all media from disk and completely resets database
-  fastify.post<{ Body?: { confirmation?: string } }>('/reset', async (request, reply) => {
+  // Factory Hard Reset: Wipes all media from disk and completely resets database (Admin only)
+  fastify.post<{ Body?: { confirmation?: string } }>('/reset', { preHandler: requireAdmin }, async (request, reply) => {
     const { confirmation } = request.body || {};
     if (confirmation && confirmation.trim().toUpperCase() !== 'RESET') {
       return reply.status(400).send({

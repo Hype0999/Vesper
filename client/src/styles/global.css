@@ -315,6 +315,17 @@ html, body, #root {
   to { transform: rotate(360deg); }
 }
 
+@keyframes youtubeRipple {
+  0% {
+    opacity: 0.85;
+    transform: translate(-50%, -50%) scale(0.75);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.35);
+  }
+}
+
 .animate-fade-in {
   animation: fadeIn 250ms var(--ease-spring) forwards;
 }
@@ -325,6 +336,33 @@ html, body, #root {
 
 .animate-scale-in {
   animation: scaleIn 250ms var(--ease-spring) forwards;
+}
+
+/* Apple Fluid Liquid Display Transitions */
+.liquid-panel {
+  background: rgba(18, 20, 24, 0.82);
+  backdrop-filter: var(--liquid-glass);
+  -webkit-backdrop-filter: var(--liquid-glass);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.85);
+  transition: transform var(--duration-normal) var(--ease-apple-fluid),
+              box-shadow var(--duration-normal) var(--ease-apple-fluid),
+              border-color var(--duration-normal) var(--ease-apple-fluid);
+}
+
+.liquid-panel:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.95);
+}
+
+/* Fluid Touch/Click Spring Scale for Buttons & Interactive Tiles */
+.interactive-spring {
+  transition: transform 0.2s var(--ease-spring), opacity 0.15s ease;
+}
+
+.interactive-spring:active {
+  transform: scale(0.96);
 }
 
 /* Responsive visibility utilities */

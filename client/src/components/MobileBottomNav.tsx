@@ -12,6 +12,7 @@ interface MobileBottomNavProps {
   noteCount: number;
   vaultCount: number;
   isVaultUnlocked: boolean;
+  canAccessVault?: boolean;
   onOpenVaultModal?: () => void;
 }
 
@@ -24,20 +25,25 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   noteCount,
   vaultCount,
   isVaultUnlocked,
+  canAccessVault = true,
   onOpenVaultModal,
 }) => {
   const tabs = [
-    { id: 'videos' as ActiveTab, label: 'Videos', icon: Film, count: videoCount },
+    { id: 'videos' as ActiveTab, label: 'Movies', icon: Film, count: videoCount },
+    { id: 'photos' as ActiveTab, label: 'Memories', icon: ImageIcon, count: photoCount },
     { id: 'songs' as ActiveTab, label: 'Songs', icon: Music, count: songCount },
-    { id: 'photos' as ActiveTab, label: 'Photos', icon: ImageIcon, count: photoCount },
     { id: 'notes' as ActiveTab, label: 'Notes', icon: FileText, count: noteCount },
-    {
-      id: 'vault' as ActiveTab,
-      label: 'Vault',
-      icon: isVaultUnlocked ? Unlock : Lock,
-      count: isVaultUnlocked ? vaultCount : undefined,
-      isVault: true,
-    },
+    ...(canAccessVault
+      ? [
+          {
+            id: 'vault' as ActiveTab,
+            label: 'Vault',
+            icon: isVaultUnlocked ? Unlock : Lock,
+            count: isVaultUnlocked ? vaultCount : undefined,
+            isVault: true,
+          },
+        ]
+      : []),
   ];
 
   return (

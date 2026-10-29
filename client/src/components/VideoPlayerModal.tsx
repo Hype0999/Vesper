@@ -6,6 +6,7 @@ import {
   Play,
   Pause,
   Volume2,
+  Volume1,
   VolumeX,
   Maximize,
   Minimize,
@@ -13,9 +14,19 @@ import {
   RotateCw,
   Share2,
   Download,
-  Heart,
+  ThumbsUp,
+  ThumbsDown,
+  Settings,
   Tv,
-  Sliders,
+  Check,
+  ChevronRight,
+  ChevronLeft,
+  FolderSync,
+  CheckCircle2,
+  Bookmark,
+  Bell,
+  MoreHorizontal,
+  Repeat,
 } from 'lucide-react';
 import type { MediaItem } from '@media-hub/shared';
 
@@ -25,7 +36,10 @@ interface VideoPlayerModalProps {
   onClose: () => void;
   onDelete?: (id: string) => void;
   onSelectRelatedVideo?: (video: MediaItem) => void;
+  onReclassify?: (id: string, newSubType: 'movie' | 'family') => void;
 }
+
+type SettingsSubmenu = 'main' | 'speed' | 'quality';
 
 export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   media,
@@ -33,6 +47,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   onClose,
   onDelete,
   onSelectRelatedVideo,
+  onReclassify,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -46,29 +61,57 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   const [volume, setVolume] = useState<number>(1);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [isTheaterMode, setIsTheaterMode] = useState<boolean>(false);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
   const [showControls, setShowControls] = useState<boolean>(true);
-  const [showSpeedMenu, setShowSpeedMenu] = useState<boolean>(false);
-  const [isFavorited, setIsFavorited] = useState<boolean>(false);
+  const [isHoveringVolume, setIsHoveringVolume] = useState<boolean>(false);
+  const [isHoveringScrubber, setIsHoveringScrubber] = useState<boolean>(false);
+
+  // Settings menu state
+  const [showSettingsMenu, setShowSettingsMenu] = useState<boolean>(false);
+  const [settingsSubmenu, setSettingsSubmenu] = useState<SettingsSubmenu>('main');
+  const [streamQuality, setStreamQuality] = useState<'auto' | '4k' | '1080p' | '720p'>('auto');
+
+  // Interactivity state
+  const [isLiked, setIsLiked] = useState<boolean>(false);
+  const [isDisliked, setIsDisliked] = useState<boolean>(false);
+  const [isSubscribed, setIsSubscribed] = useState<boolean>(false);
+  const [isSaved, setIsSaved] = useState<boolean>(false);
+  const [isLooping, setIsLooping] = useState<boolean>(false);
+  const [showMoreMenu, setShowMoreMenu] = useState<boolean>(false);
+  const [likeCount, setLikeCount] = useState<number>(42);
   const [isCopied, setIsCopied] = useState<boolean>(false);
-  const [playRipple, setPlayRipple] = useState<'play' | 'pause' | null>(null);
-  const [isTheaterMode, setIsTheaterMode] = useState<boolean>(false);
-  const [doubleTapRipple, setDoubleTapRipple] = useState<{ side: 'left' | 'right'; text: string } | null>(null);
+  const [showFullDesc, setShowFullDesc] = useState<boolean>(false);
+  const [centerRipple, setCenterRipple] = useState<'play' | 'pause' | null>(null);
+  const [seekRipple, setSeekRipple] = useState<{ side: 'left' | 'right'; text: string } | null>(null);
   const [hoverScrubTime, setHoverScrubTime] = useState<number | null>(null);
   const [hoverScrubX, setHoverScrubX] = useState<number>(0);
-  const [streamQuality, setStreamQuality] = useState<'auto' | '4k' | '1080p' | '720p'>('auto');
-  const [showQualityMenu, setShowQualityMenu] = useState<boolean>(false);
+
   const lastTapRef = useRef<{ time: number; x: number }>({ time: 0, x: 0 });
 
   useEffect(() => {
     if (media) {
-      setIsFavorited(media.isFavorite);
+      setIsLiked(media.isFavorite);
+      setIsDisliked(false);
+      setShowFullDesc(false);
+      setShowSettingsMenu(false);
+      setShowMoreMenu(false);
+      setSettingsSubmenu('main');
+      const baseLikes = media.playCount ? Math.max(14, media.playCount * 3 + 5) : 42;
+      setLikeCount(media.isFavorite ? baseLikes + 1 : baseLikes);
     }
   }, [media]);
 
-  // Format seconds to mm:ss or hh:mm:ss
+  const formatCompactNumber = (num: number): string => {
+    if (!num || isNaN(num)) return '0';
+    if (num >= 1000000) return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+    return num.toString();
+  };
+
+  // Format seconds to mm:ss or hh:mm:ss (YouTube format, guarded against non-finite values)
   const formatTime = (seconds: number): string => {
-    if (isNaN(seconds) || seconds < 0) return '0:00';
+    if (!seconds || isNaN(seconds) || !isFinite(seconds) || seconds < 0) return '0:00';
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
     const s = Math.floor(seconds % 60);
@@ -96,12 +139,11 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     }
   }, [media]);
 
-  // Keyboard hotkeys (YouTube standard)
+  // Keyboard hotkeys (Official YouTube Standards)
   useEffect(() => {
     if (!media) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't capture when typing in inputs
       if (['input', 'textarea'].includes((e.target as HTMLElement)?.tagName?.toLowerCase())) return;
 
       if (e.key === 'Escape') {
@@ -111,21 +153,36 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           saveProgress();
           onClose();
         }
-      } else if (e.key === ' ' || e.key === 'k') {
+      } else if (e.key === ' ' || e.key === 'k' || e.key === 'K') {
         e.preventDefault();
         togglePlay();
-      } else if (e.key === 'ArrowLeft' || e.key === 'j') {
+      } else if (e.key === 'j' || e.key === 'J') {
         e.preventDefault();
         skipTime(-10);
-      } else if (e.key === 'ArrowRight' || e.key === 'l') {
+      } else if (e.key === 'l' || e.key === 'L') {
         e.preventDefault();
         skipTime(10);
-      } else if (e.key === 'm') {
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        skipTime(-5);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        skipTime(5);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        adjustVolume(0.05);
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        adjustVolume(-0.05);
+      } else if (e.key === 'm' || e.key === 'M') {
         e.preventDefault();
         toggleMute();
-      } else if (e.key === 'f') {
+      } else if (e.key === 'f' || e.key === 'F') {
         e.preventDefault();
         void toggleFullscreen();
+      } else if (e.key === 't' || e.key === 'T') {
+        e.preventDefault();
+        setIsTheaterMode((prev) => !prev);
       }
     };
 
@@ -133,15 +190,14 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [media, isFullscreen, isPlaying, onClose, saveProgress]);
 
-  // Reset controls timer
+  // Auto-hide controls timer
   const handleMouseMove = () => {
     setShowControls(true);
     if (controlsTimeoutRef.current) window.clearTimeout(controlsTimeoutRef.current);
-    if (isPlaying) {
+    if (isPlaying && !showSettingsMenu) {
       controlsTimeoutRef.current = window.setTimeout(() => {
         setShowControls(false);
-        setShowSpeedMenu(false);
-      }, 2500);
+      }, 3000);
     }
   };
 
@@ -151,13 +207,13 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     if (videoRef.current.paused) {
       void videoRef.current.play();
       setIsPlaying(true);
-      setPlayRipple('play');
+      setCenterRipple('play');
     } else {
       videoRef.current.pause();
       setIsPlaying(false);
-      setPlayRipple('pause');
+      setCenterRipple('pause');
     }
-    setTimeout(() => setPlayRipple(null), 500);
+    setTimeout(() => setCenterRipple(null), 500);
   };
 
   const handleVideoClick = (e: React.MouseEvent<HTMLVideoElement>) => {
@@ -169,12 +225,12 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     if (timeDiff < 300) {
       if (clickX < 0.35) {
         skipTime(-10);
-        setDoubleTapRipple({ side: 'left', text: '-10s' });
-        setTimeout(() => setDoubleTapRipple(null), 600);
+        setSeekRipple({ side: 'left', text: '10 seconds' });
+        setTimeout(() => setSeekRipple(null), 600);
       } else if (clickX > 0.65) {
         skipTime(10);
-        setDoubleTapRipple({ side: 'right', text: '+10s' });
-        setTimeout(() => setDoubleTapRipple(null), 600);
+        setSeekRipple({ side: 'right', text: '10 seconds' });
+        setTimeout(() => setSeekRipple(null), 600);
       } else {
         togglePlay();
       }
@@ -194,10 +250,25 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     videoRef.current.currentTime = Math.max(0, Math.min(videoRef.current.duration || 0, videoRef.current.currentTime + deltaSeconds));
   };
 
+  const adjustVolume = (delta: number) => {
+    if (!videoRef.current) return;
+    const newVol = Math.max(0, Math.min(1, volume + delta));
+    setVolume(newVol);
+    videoRef.current.volume = newVol;
+    const muted = newVol === 0;
+    setIsMuted(muted);
+    videoRef.current.muted = muted;
+  };
+
   const toggleMute = () => {
     if (!videoRef.current) return;
-    videoRef.current.muted = !videoRef.current.muted;
-    setIsMuted(videoRef.current.muted);
+    const newMuted = !videoRef.current.muted;
+    videoRef.current.muted = newMuted;
+    setIsMuted(newMuted);
+    if (!newMuted && volume === 0) {
+      setVolume(0.5);
+      videoRef.current.volume = 0.5;
+    }
   };
 
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -224,13 +295,14 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   const handleSpeedChange = (speed: number) => {
     setPlaybackSpeed(speed);
     if (videoRef.current) videoRef.current.playbackRate = speed;
-    setShowSpeedMenu(false);
+    setSettingsSubmenu('main');
+    setShowSettingsMenu(false);
   };
 
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!videoRef.current || !duration) return;
     const rect = e.currentTarget.getBoundingClientRect();
-    const pos = (e.clientX - rect.left) / rect.width;
+    const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     videoRef.current.currentTime = pos * duration;
   };
 
@@ -241,25 +313,52 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     setTimeout(() => setIsCopied(false), 2000);
   };
 
+  const handleToggleLike = async () => {
+    if (!media) return;
+    const nextState = !isLiked;
+    setIsLiked(nextState);
+    if (nextState) {
+      setIsDisliked(false);
+      setLikeCount((prev) => prev + 1);
+    } else {
+      setLikeCount((prev) => Math.max(0, prev - 1));
+    }
+
+    try {
+      await fetch(`/api/media/${media.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: JSON.stringify({ isFavorite: nextState }),
+      });
+    } catch {
+      // ignore
+    }
+  };
+
   if (!media) return null;
 
   const streamUrl = `/api/media/${media.id}/stream`;
   const relatedVideos = allVideos.filter((v) => v.id !== media.id && v.type === 'video');
+  const progressPercent = duration ? (currentTime / duration) * 100 : 0;
 
   return (
     <div
       style={{
         position: 'fixed',
         inset: 0,
-        backgroundColor: 'rgba(2, 3, 4, 0.96)',
-        backdropFilter: 'blur(16px)',
-        WebkitBackdropFilter: 'blur(16px)',
+        backgroundColor: 'rgba(0, 0, 0, 0.96)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
         zIndex: 1100,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         overflowY: 'auto',
-        padding: 'var(--space-4)',
+        color: '#f1f1f1',
+        fontFamily: 'Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif',
       }}
       onClick={(e) => {
         if (e.target === e.currentTarget) {
@@ -271,92 +370,68 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
       <div
         style={{
           width: '100%',
-          maxWidth: isTheaterMode ? '100%' : '1120px',
+          maxWidth: isTheaterMode ? '100%' : '1180px',
           display: 'flex',
           flexDirection: 'column',
           margin: '0 auto',
-          transition: 'max-width 0.3s ease',
+          padding: isTheaterMode ? '0' : '16px 20px',
+          transition: 'max-width 0.25s ease, padding 0.25s ease',
         }}
       >
-        {/* Top Header Row */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-3)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-            <span style={{ fontSize: '1rem', fontWeight: 600, color: '#ffffff' }}>Nest Theater</span>
-            <span style={{ fontSize: '0.68rem', background: 'rgba(239, 68, 68, 0.15)', color: '#ff4b4b', padding: '2px 7px', borderRadius: '4px', fontWeight: 700, border: '1px solid rgba(239, 68, 68, 0.3)' }}>
-              4K ULTRA HD • DIRECT STREAM
-            </span>
-            {media.isPrivate && (
-              <span className="badge badge-warning" style={{ background: 'var(--vault-subtle)', color: 'var(--vault-primary)' }}>
-                <Lock size={12} /> Vault Protected
-              </span>
-            )}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button
-              onClick={() => setIsTheaterMode(!isTheaterMode)}
-              style={{
-                background: isTheaterMode ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.08)',
-                border: 'none',
-                color: isTheaterMode ? '#ffffff' : 'var(--text-secondary)',
-                cursor: 'pointer',
-                padding: '5px 10px',
-                borderRadius: 'var(--radius-sm)',
-                fontSize: '0.75rem',
-                fontWeight: 600,
-              }}
-            >
-              {isTheaterMode ? 'Standard View' : 'Theater Mode'}
-            </button>
-            <button
-              onClick={() => { saveProgress(); onClose(); }}
-              style={{
-                background: 'rgba(255, 255, 255, 0.1)',
-                border: 'none',
-                color: 'var(--text-primary)',
-                cursor: 'pointer',
-                padding: '6px',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-              aria-label="Close"
-            >
-              <X size={18} />
-            </button>
-          </div>
-        </div>
-
-        {/* YouTube Custom Video Player Frame */}
+        {/* YouTube Video Player Viewport */}
         <div
           ref={containerRef}
           onMouseMove={handleMouseMove}
-          onMouseLeave={() => isPlaying && setShowControls(false)}
+          onMouseLeave={() => isPlaying && !showSettingsMenu && setShowControls(false)}
           style={{
             position: 'relative',
             width: '100%',
             aspectRatio: '16/9',
-            background: '#000000',
-            borderRadius: isFullscreen ? 0 : 'var(--radius-md)',
+            backgroundColor: '#000000',
+            borderRadius: isFullscreen || isTheaterMode ? 0 : '12px',
             overflow: 'hidden',
-            boxShadow: isTheaterMode ? '0 0 60px rgba(255, 0, 0, 0.2), 0 12px 40px rgba(0, 0, 0, 0.95)' : '0 8px 32px rgba(0, 0, 0, 0.9)',
-            border: isFullscreen ? 'none' : '1px solid rgba(255, 255, 255, 0.1)',
+            boxShadow: '0 12px 48px rgba(0, 0, 0, 0.95)',
+            userSelect: 'none',
           }}
         >
+          {/* Main Video Stream */}
           <video
             ref={videoRef}
             src={streamUrl}
             autoPlay
             playsInline
+            loop={isLooping}
             onClick={handleVideoClick}
             onTimeUpdate={() => {
-              if (videoRef.current) setCurrentTime(videoRef.current.currentTime);
+              if (videoRef.current) {
+                const ct = videoRef.current.currentTime;
+                if (isFinite(ct)) setCurrentTime(ct);
+                const d = videoRef.current.duration;
+                if (isFinite(d) && d > 0 && d !== duration) {
+                  setDuration(d);
+                }
+              }
             }}
             onLoadedMetadata={() => {
               if (videoRef.current) {
-                setDuration(videoRef.current.duration);
+                const d = videoRef.current.duration;
+                if (isFinite(d) && d > 0) {
+                  setDuration(d);
+                } else if (media.duration && isFinite(media.duration) && media.duration > 0) {
+                  setDuration(media.duration);
+                }
                 if (media.playbackPosition && media.playbackPosition > 5) {
                   videoRef.current.currentTime = media.playbackPosition;
+                }
+              }
+            }}
+            onDurationChange={() => {
+              if (videoRef.current) {
+                const d = videoRef.current.duration;
+                if (isFinite(d) && d > 0) {
+                  setDuration(d);
+                } else if (media.duration && isFinite(media.duration) && media.duration > 0) {
+                  setDuration(media.duration);
                 }
               }
             }}
@@ -373,80 +448,194 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
               }
               saveProgress();
             }}
-            style={{ width: '100%', height: '100%', objectFit: 'contain', cursor: 'pointer' }}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
+              cursor: 'pointer',
+              backgroundColor: '#000000',
+            }}
           />
 
-          {/* Double Tap Seek Animation (YouTube Style Left or Right) */}
-          {doubleTapRipple && (
-            <div
-              style={{
-                position: 'absolute',
-                top: '50%',
-                [doubleTapRipple.side]: '15%',
-                transform: 'translateY(-50%)',
-                background: 'rgba(0, 0, 0, 0.8)',
-                color: '#ffffff',
-                padding: '12px 20px',
-                borderRadius: 'var(--radius-full)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                fontSize: '1.05rem',
-                fontWeight: 700,
-                pointerEvents: 'none',
-                backdropFilter: 'blur(8px)',
-                zIndex: 10,
-              }}
-            >
-              {doubleTapRipple.side === 'left' ? <RotateCcw size={20} /> : <RotateCw size={20} />}
-              <span>{doubleTapRipple.text}</span>
+          {/* YouTube Subtle Top Header Vignette (Fades with controls) */}
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              padding: '16px 24px',
+              background: 'linear-gradient(to bottom, rgba(0, 0, 0, 0.75) 0%, rgba(0, 0, 0, 0.3) 60%, transparent 100%)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              opacity: showControls ? 1 : 0,
+              transition: 'opacity 0.25s ease',
+              pointerEvents: showControls ? 'auto' : 'none',
+              zIndex: 20,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+              <span
+                style={{
+                  fontSize: '1rem',
+                  fontWeight: 500,
+                  color: '#ffffff',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  letterSpacing: '0.2px',
+                }}
+              >
+                {media.title}
+              </span>
+              {media.isPrivate && (
+                <span
+                  style={{
+                    background: 'rgba(245, 158, 11, 0.2)',
+                    color: '#f59e0b',
+                    fontSize: '0.72rem',
+                    fontWeight: 600,
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    border: '1px solid rgba(245, 158, 11, 0.4)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                >
+                  <Lock size={11} /> Vault
+                </span>
+              )}
             </div>
-          )}
 
-          {/* Center Click Ripple Animation */}
-          {playRipple && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <button
+                onClick={() => setIsTheaterMode(!isTheaterMode)}
+                style={{
+                  background: isTheaterMode ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.1)',
+                  border: 'none',
+                  color: '#ffffff',
+                  cursor: 'pointer',
+                  padding: '6px 12px',
+                  borderRadius: '16px',
+                  fontSize: '0.78rem',
+                  fontWeight: 500,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  backdropFilter: 'blur(6px)',
+                  transition: 'background 0.15s ease',
+                }}
+                title="Toggle Theater Mode (T)"
+              >
+                <Tv size={14} />
+                <span>{isTheaterMode ? 'Default' : 'Theater'}</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  saveProgress();
+                  onClose();
+                }}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  border: 'none',
+                  color: '#ffffff',
+                  cursor: 'pointer',
+                  padding: '7px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backdropFilter: 'blur(6px)',
+                  transition: 'background 0.15s ease',
+                }}
+                aria-label="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
+          </div>
+
+          {/* Center Play/Pause Soft Ripple Animation */}
+          {centerRipple && (
             <div
               style={{
                 position: 'absolute',
                 top: '50%',
                 left: '50%',
                 transform: 'translate(-50%, -50%)',
-                width: '68px',
-                height: '68px',
+                width: '72px',
+                height: '72px',
                 borderRadius: '50%',
-                background: 'rgba(0, 0, 0, 0.65)',
+                backgroundColor: 'rgba(0, 0, 0, 0.65)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 color: '#ffffff',
                 pointerEvents: 'none',
-                backdropFilter: 'blur(6px)',
-                animation: 'rippleFade 0.5s ease-out forwards',
+                backdropFilter: 'blur(8px)',
+                animation: 'youtubeRipple 0.5s ease-out forwards',
+                zIndex: 25,
               }}
             >
-              {playRipple === 'play' ? <Play size={32} fill="#fff" /> : <Pause size={32} fill="#fff" />}
+              {centerRipple === 'play' ? <Play size={36} fill="#ffffff" /> : <Pause size={36} fill="#ffffff" />}
             </div>
           )}
 
-          {/* Custom YouTube Scrubber & Control Bar Overlay */}
+          {/* Double-Tap 10s Seek Ripple (Classic YouTube Mobile & Desktop) */}
+          {seekRipple && (
+            <div
+              style={{
+                position: 'absolute',
+                top: '50%',
+                [seekRipple.side]: '12%',
+                transform: 'translateY(-50%)',
+                backgroundColor: 'rgba(0, 0, 0, 0.75)',
+                color: '#ffffff',
+                padding: '12px 22px',
+                borderRadius: '30px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontSize: '0.95rem',
+                fontWeight: 600,
+                pointerEvents: 'none',
+                backdropFilter: 'blur(10px)',
+                zIndex: 25,
+              }}
+            >
+              {seekRipple.side === 'left' ? <RotateCcw size={20} /> : <RotateCw size={20} />}
+              <span>{seekRipple.text}</span>
+            </div>
+          )}
+
+          {/* Authentic YouTube Bottom Control Bar */}
           <div
             style={{
               position: 'absolute',
               bottom: 0,
               left: 0,
               right: 0,
-              background: 'linear-gradient(to top, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.4) 70%, transparent 100%)',
-              padding: 'var(--space-3) var(--space-4)',
+              background: 'linear-gradient(to top, rgba(0, 0, 0, 0.88) 0%, rgba(0, 0, 0, 0.5) 45%, rgba(0, 0, 0, 0.15) 75%, transparent 100%)',
+              padding: '0 16px 12px 16px',
               display: 'flex',
               flexDirection: 'column',
               gap: '6px',
               opacity: showControls ? 1 : 0,
-              transition: 'opacity 0.25s ease',
+              transition: 'opacity 0.2s cubic-bezier(0, 0, 0.2, 1)',
               pointerEvents: showControls ? 'auto' : 'none',
+              zIndex: 30,
             }}
           >
-            {/* Scrubber / Progress Bar with Hover Preview Tooltip */}
+            {/* Signature YouTube Scrubber Bar */}
             <div
+              onMouseEnter={() => setIsHoveringScrubber(true)}
+              onMouseLeave={() => {
+                setIsHoveringScrubber(false);
+                setHoverScrubTime(null);
+              }}
               onClick={handleSeek}
               onMouseMove={(e) => {
                 const rect = e.currentTarget.getBoundingClientRect();
@@ -454,18 +643,18 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
                 setHoverScrubTime(pos * duration);
                 setHoverScrubX(e.clientX - rect.left);
               }}
-              onMouseLeave={() => setHoverScrubTime(null)}
               style={{
                 position: 'relative',
-                height: '6px',
                 width: '100%',
-                background: 'rgba(255, 255, 255, 0.25)',
+                height: isHoveringScrubber ? '6px' : '3px',
+                backgroundColor: 'rgba(255, 255, 255, 0.25)',
                 cursor: 'pointer',
-                borderRadius: '3px',
-                transition: 'height 0.15s ease',
+                transition: 'height 0.1s ease',
+                display: 'flex',
+                alignItems: 'center',
               }}
             >
-              {/* Floating Timestamp Tooltip */}
+              {/* Hover Timestamp Tooltip */}
               {hoverScrubTime !== null && (
                 <div
                   style={{
@@ -473,251 +662,384 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
                     bottom: '16px',
                     left: `${hoverScrubX}px`,
                     transform: 'translateX(-50%)',
-                    background: 'rgba(10, 14, 23, 0.95)',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                    padding: '3px 8px',
+                    backgroundColor: 'rgba(28, 28, 28, 0.95)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    padding: '3px 7px',
                     borderRadius: '4px',
                     fontSize: '0.75rem',
-                    fontWeight: 700,
+                    fontWeight: 600,
                     color: '#ffffff',
+                    fontFamily: 'monospace',
                     pointerEvents: 'none',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.6)',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.7)',
                     whiteSpace: 'nowrap',
-                    zIndex: 25,
+                    zIndex: 40,
                   }}
                 >
                   {formatTime(hoverScrubTime)}
                 </div>
               )}
 
+              {/* YouTube Signature Red Played Bar */}
               <div
                 style={{
                   height: '100%',
-                  width: `${duration ? (currentTime / duration) * 100 : 0}%`,
-                  background: 'linear-gradient(90deg, #10b981 0%, #38bdf8 100%)',
-                  boxShadow: '0 0 10px rgba(56, 189, 248, 0.6)',
-                  borderRadius: '3px',
+                  width: `${progressPercent}%`,
+                  backgroundColor: '#ff0000',
                   position: 'relative',
                 }}
               >
+                {/* 13px YouTube Red Scrub Circle (Scales up on hover) */}
                 <div
                   style={{
                     position: 'absolute',
                     right: '-6px',
-                    top: '-3px',
-                    width: '12px',
-                    height: '12px',
+                    top: '50%',
+                    transform: isHoveringScrubber ? 'translateY(-50%) scale(1)' : 'translateY(-50%) scale(0)',
+                    width: '13px',
+                    height: '13px',
                     borderRadius: '50%',
-                    background: '#ffffff',
-                    boxShadow: '0 0 8px rgba(0,0,0,0.8)',
+                    backgroundColor: '#ff0000',
+                    transition: 'transform 0.12s ease',
                   }}
                 />
               </div>
             </div>
 
             {/* Bottom Controls Row */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '4px' }}>
+              {/* Left Controls: Play, Rewind, Forward, Volume, Time */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 {/* Play / Pause */}
                 <button
                   onClick={togglePlay}
-                  style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: '4px' }}
-                  title={isPlaying ? 'Pause (space)' : 'Play (space)'}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#ffffff',
+                    cursor: 'pointer',
+                    padding: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: '50%',
+                    opacity: 0.92,
+                    transition: 'opacity 0.15s ease',
+                  }}
+                  title={isPlaying ? 'Pause (k)' : 'Play (k)'}
                 >
-                  {isPlaying ? <Pause size={20} fill="#fff" /> : <Play size={20} fill="#fff" />}
+                  {isPlaying ? <Pause size={22} fill="#ffffff" /> : <Play size={22} fill="#ffffff" />}
                 </button>
 
                 {/* Rewind 10s */}
                 <button
                   onClick={() => skipTime(-10)}
-                  style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: '4px' }}
-                  title="Rewind 10 seconds (J / ←)"
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#ffffff',
+                    cursor: 'pointer',
+                    padding: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: 0.85,
+                  }}
+                  title="Rewind 10 seconds (j)"
                 >
-                  <RotateCcw size={17} />
+                  <RotateCcw size={18} />
                 </button>
 
                 {/* Forward 10s */}
                 <button
                   onClick={() => skipTime(10)}
-                  style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: '4px' }}
-                  title="Forward 10 seconds (L / →)"
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#ffffff',
+                    cursor: 'pointer',
+                    padding: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: 0.85,
+                  }}
+                  title="Forward 10 seconds (l)"
                 >
-                  <RotateCw size={17} />
+                  <RotateCw size={18} />
                 </button>
 
-                {/* Volume & Mute */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                {/* Volume & Slide-out Horizontal Slider */}
+                <div
+                  onMouseEnter={() => setIsHoveringVolume(true)}
+                  onMouseLeave={() => setIsHoveringVolume(false)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '4px',
+                    cursor: 'pointer',
+                  }}
+                >
                   <button
                     onClick={toggleMute}
-                    style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: '4px' }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#ffffff',
+                      cursor: 'pointer',
+                      padding: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
                     title={isMuted ? 'Unmute (m)' : 'Mute (m)'}
                   >
-                    {isMuted || volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
+                    {isMuted || volume === 0 ? (
+                      <VolumeX size={20} />
+                    ) : volume < 0.5 ? (
+                      <Volume1 size={20} />
+                    ) : (
+                      <Volume2 size={20} />
+                    )}
                   </button>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    value={isMuted ? 0 : volume}
-                    onChange={handleVolumeChange}
+
+                  <div
                     style={{
-                      width: '64px',
-                      height: '3px',
-                      accentColor: '#ff0000',
-                      cursor: 'pointer',
+                      width: isHoveringVolume ? '64px' : '0px',
+                      overflow: 'hidden',
+                      transition: 'width 0.2s cubic-bezier(0, 0, 0.2, 1)',
+                      display: 'flex',
+                      alignItems: 'center',
                     }}
-                  />
+                  >
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={isMuted ? 0 : volume}
+                      onChange={handleVolumeChange}
+                      style={{
+                        width: '56px',
+                        height: '3.5px',
+                        accentColor: '#ffffff',
+                        cursor: 'pointer',
+                      }}
+                    />
+                  </div>
                 </div>
 
                 {/* Time Display */}
-                <span style={{ fontSize: '0.8rem', color: '#ffffff', fontVariantNumeric: 'tabular-nums' }}>
+                <span
+                  style={{
+                    fontSize: '0.82rem',
+                    color: '#ffffff',
+                    fontVariantNumeric: 'tabular-nums',
+                    marginLeft: '6px',
+                    opacity: 0.9,
+                    userSelect: 'none',
+                  }}
+                >
                   {formatTime(currentTime)} / {formatTime(duration)}
                 </span>
               </div>
 
-              {/* Right Controls */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', position: 'relative' }}>
-                {/* Playback Speed Menu Button */}
-                <button
-                  onClick={() => {
-                    setShowSpeedMenu(!showSpeedMenu);
-                    setShowQualityMenu(false);
-                  }}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#fff',
-                    cursor: 'pointer',
-                    fontSize: '0.8rem',
-                    fontWeight: 500,
-                    padding: '4px 6px',
-                  }}
-                  title="Playback speed"
-                >
-                  {playbackSpeed}x
-                </button>
-
-                {/* Speed Popup */}
-                {showSpeedMenu && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      bottom: '36px',
-                      right: '80px',
-                      background: 'rgba(20, 22, 26, 0.95)',
-                      border: '1px solid var(--border-strong)',
-                      borderRadius: 'var(--radius-sm)',
-                      padding: '4px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '2px',
-                      zIndex: 20,
-                      backdropFilter: 'blur(8px)',
-                    }}
-                  >
-                    {[0.5, 0.75, 1, 1.25, 1.5, 2].map((spd) => (
-                      <button
-                        key={spd}
-                        onClick={() => handleSpeedChange(spd)}
-                        style={{
-                          background: playbackSpeed === spd ? 'rgba(56, 189, 248, 0.2)' : 'transparent',
-                          color: playbackSpeed === spd ? '#38bdf8' : '#ffffff',
-                          border: 'none',
-                          padding: '4px 12px',
-                          fontSize: '0.75rem',
-                          borderRadius: 'var(--radius-xs)',
-                          cursor: 'pointer',
-                          textAlign: 'left',
-                        }}
-                      >
-                        {spd === 1 ? 'Normal (1x)' : `${spd}x`}
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {/* Stream Quality Selector */}
+              {/* Right Controls: Settings Gear, PiP, Theater, Fullscreen */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'relative' }}>
+                {/* Settings Gear */}
                 <div style={{ position: 'relative' }}>
                   <button
-                    type="button"
                     onClick={() => {
-                      setShowQualityMenu(!showQualityMenu);
-                      setShowSpeedMenu(false);
+                      setShowSettingsMenu(!showSettingsMenu);
+                      setSettingsSubmenu('main');
                     }}
                     style={{
-                      background: 'rgba(255, 255, 255, 0.1)',
-                      border: '1px solid rgba(255, 255, 255, 0.2)',
-                      color: '#fff',
+                      background: 'none',
+                      border: 'none',
+                      color: '#ffffff',
                       cursor: 'pointer',
-                      fontSize: '0.75rem',
-                      fontWeight: 700,
-                      padding: '3px 8px',
-                      borderRadius: '4px',
+                      padding: '6px',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '4px',
+                      justifyContent: 'center',
+                      opacity: showSettingsMenu ? 1 : 0.85,
+                      transform: showSettingsMenu ? 'rotate(30deg)' : 'rotate(0deg)',
+                      transition: 'transform 0.2s ease, opacity 0.15s ease',
                     }}
-                    title="Stream Quality"
+                    title="Settings"
                   >
-                    <Sliders size={12} />
-                    <span>
-                      {streamQuality === 'auto' ? 'Auto Direct' : streamQuality === '4k' ? '4K Direct' : streamQuality.toUpperCase()}
-                    </span>
+                    <Settings size={19} />
                   </button>
 
-                  {showQualityMenu && (
+                  {/* YouTube Real Settings Popover Menu */}
+                  {showSettingsMenu && (
                     <div
                       style={{
                         position: 'absolute',
-                        bottom: '36px',
+                        bottom: '44px',
                         right: 0,
-                        background: 'rgba(15, 17, 23, 0.96)',
-                        border: '1px solid rgba(255, 255, 255, 0.15)',
-                        borderRadius: '8px',
-                        padding: '6px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '4px',
-                        minWidth: '220px',
-                        zIndex: 30,
-                        backdropFilter: 'blur(12px)',
-                        boxShadow: '0 10px 25px rgba(0,0,0,0.8)',
+                        width: '240px',
+                        backgroundColor: 'rgba(28, 28, 28, 0.98)',
+                        border: '1px solid #383838',
+                        borderRadius: '10px',
+                        padding: '6px 0',
+                        boxShadow: '0 8px 30px rgba(0, 0, 0, 0.9)',
+                        backdropFilter: 'blur(16px)',
+                        zIndex: 50,
                       }}
                     >
-                      <div style={{ padding: '4px 8px', fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-                        STREAMING QUALITY (0% CPU)
-                      </div>
-                      {[
-                        { id: 'auto', label: 'Auto (Source Direct)', desc: '1:1 hardware passthrough' },
-                        { id: '4k', label: '4K Ultra-HD Direct', desc: 'Zero transcode 2160p' },
-                        { id: '1080p', label: '1080p Full HD Passthrough', desc: 'Crisp high-speed seek' },
-                        { id: '720p', label: '720p Mobile Stream', desc: 'Bandwidth saver buffer' },
-                      ].map((q) => (
-                        <button
-                          key={q.id}
-                          type="button"
-                          onClick={() => {
-                            setStreamQuality(q.id as any);
-                            setShowQualityMenu(false);
-                          }}
-                          style={{
-                            background: streamQuality === q.id ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
-                            color: streamQuality === q.id ? '#38bdf8' : '#ffffff',
-                            border: 'none',
-                            padding: '6px 8px',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            textAlign: 'left',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '1px',
-                          }}
-                        >
-                          <span style={{ fontSize: '0.78rem', fontWeight: 600 }}>{q.label}</span>
-                          <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>{q.desc}</span>
-                        </button>
-                      ))}
+                      {settingsSubmenu === 'main' && (
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          {/* Playback speed option */}
+                          <div
+                            onClick={() => setSettingsSubmenu('speed')}
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              padding: '10px 16px',
+                              cursor: 'pointer',
+                              fontSize: '0.84rem',
+                              color: '#ffffff',
+                              transition: 'background 0.12s ease',
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)')}
+                            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                          >
+                            <span>Playback speed</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#aaaaaa', fontSize: '0.8rem' }}>
+                              <span>{playbackSpeed === 1 ? 'Normal' : `${playbackSpeed}x`}</span>
+                              <ChevronRight size={15} />
+                            </div>
+                          </div>
+
+                          {/* Quality option */}
+                          <div
+                            onClick={() => setSettingsSubmenu('quality')}
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              padding: '10px 16px',
+                              cursor: 'pointer',
+                              fontSize: '0.84rem',
+                              color: '#ffffff',
+                              transition: 'background 0.12s ease',
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)')}
+                            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                          >
+                            <span>Quality</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#aaaaaa', fontSize: '0.8rem' }}>
+                              <span>{streamQuality === 'auto' ? 'Auto (Source)' : streamQuality.toUpperCase()}</span>
+                              <ChevronRight size={15} />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Speed Submenu */}
+                      {settingsSubmenu === 'speed' && (
+                        <div>
+                          <div
+                            onClick={() => setSettingsSubmenu('main')}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              padding: '8px 14px',
+                              borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+                              cursor: 'pointer',
+                              fontSize: '0.84rem',
+                              fontWeight: 600,
+                            }}
+                          >
+                            <ChevronLeft size={16} />
+                            <span>Playback speed</span>
+                          </div>
+                          {[0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map((spd) => (
+                            <div
+                              key={spd}
+                              onClick={() => handleSpeedChange(spd)}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '10px',
+                                padding: '8px 16px',
+                                cursor: 'pointer',
+                                fontSize: '0.82rem',
+                                color: '#ffffff',
+                                backgroundColor: playbackSpeed === spd ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
+                              }}
+                              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.15)')}
+                              onMouseLeave={(e) =>
+                                (e.currentTarget.style.backgroundColor = playbackSpeed === spd ? 'rgba(255, 255, 255, 0.1)' : 'transparent')
+                              }
+                            >
+                              <div style={{ width: '16px', display: 'flex', justifyContent: 'center' }}>
+                                {playbackSpeed === spd && <Check size={14} color="#ffffff" />}
+                              </div>
+                              <span>{spd === 1 ? 'Normal' : `${spd}x`}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Quality Submenu */}
+                      {settingsSubmenu === 'quality' && (
+                        <div>
+                          <div
+                            onClick={() => setSettingsSubmenu('main')}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              padding: '8px 14px',
+                              borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+                              cursor: 'pointer',
+                              fontSize: '0.84rem',
+                              fontWeight: 600,
+                            }}
+                          >
+                            <ChevronLeft size={16} />
+                            <span>Quality</span>
+                          </div>
+                          {[
+                            { id: 'auto', label: 'Auto (Source Direct)' },
+                            { id: '4k', label: '4K Ultra HD (2160p)' },
+                            { id: '1080p', label: '1080p Full HD' },
+                            { id: '720p', label: '720p HD' },
+                          ].map((q) => (
+                            <div
+                              key={q.id}
+                              onClick={() => {
+                                setStreamQuality(q.id as any);
+                                setSettingsSubmenu('main');
+                                setShowSettingsMenu(false);
+                              }}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '10px',
+                                padding: '8px 16px',
+                                cursor: 'pointer',
+                                fontSize: '0.82rem',
+                                color: '#ffffff',
+                                backgroundColor: streamQuality === q.id ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
+                              }}
+                              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.15)')}
+                              onMouseLeave={(e) =>
+                                (e.currentTarget.style.backgroundColor = streamQuality === q.id ? 'rgba(255, 255, 255, 0.1)' : 'transparent')
+                              }
+                            >
+                              <div style={{ width: '16px', display: 'flex', justifyContent: 'center' }}>
+                                {streamQuality === q.id && <Check size={14} color="#ffffff" />}
+                              </div>
+                              <span>{q.label}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -731,173 +1053,627 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
                       void videoRef.current.requestPictureInPicture();
                     }
                   }}
-                  style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: '4px' }}
-                  title="Picture in Picture"
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#ffffff',
+                    cursor: 'pointer',
+                    padding: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: 0.85,
+                  }}
+                  title="Miniplayer (Picture in Picture)"
                 >
-                  <Tv size={17} />
+                  <Tv size={18} />
+                </button>
+
+                {/* Theater Mode */}
+                <button
+                  onClick={() => setIsTheaterMode(!isTheaterMode)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#ffffff',
+                    cursor: 'pointer',
+                    padding: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: 0.85,
+                  }}
+                  title={isTheaterMode ? 'Default view (t)' : 'Theater mode (t)'}
+                >
+                  <div
+                    style={{
+                      width: '18px',
+                      height: '13px',
+                      border: '2px solid #ffffff',
+                      borderRadius: '2px',
+                      background: isTheaterMode ? '#ffffff' : 'transparent',
+                    }}
+                  />
                 </button>
 
                 {/* Fullscreen */}
                 <button
                   onClick={() => void toggleFullscreen()}
-                  style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: '4px' }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#ffffff',
+                    cursor: 'pointer',
+                    padding: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: 0.85,
+                  }}
                   title={isFullscreen ? 'Exit full screen (f)' : 'Full screen (f)'}
                 >
-                  {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
+                  {isFullscreen ? <Minimize size={19} /> : <Maximize size={19} />}
                 </button>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Video Information & Social Actions Bar (YouTube Style) */}
-        <div style={{ padding: 'var(--space-4) 0', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-          {/* Title */}
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
+        {/* Video Information & Classic YouTube Actions */}
+        <div style={{ padding: '16px 0', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Video Title */}
+          <h1
+            style={{
+              fontSize: '1.35rem',
+              fontWeight: 700,
+              color: '#f1f1f1',
+              margin: 0,
+              lineHeight: 1.3,
+              letterSpacing: '-0.01em',
+              fontFamily: "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif",
+            }}
+          >
             {media.title}
-          </h2>
+          </h1>
 
-          {/* User channel info + Action buttons */}
+          {/* YouTube Channel Row & Action Buttons */}
           <div
             style={{
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
               flexWrap: 'wrap',
-              gap: 'var(--space-3)',
-              paddingBottom: 'var(--space-3)',
-              borderBottom: '1px solid var(--border-subtle)',
+              gap: '12px',
             }}
           >
-            {/* Channel avatar & info */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+            {/* Authentic YouTube Channel Info & Subscribe Pill */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
               <div
                 style={{
-                  width: '40px',
-                  height: '40px',
+                  width: '44px',
+                  height: '44px',
                   borderRadius: '50%',
-                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                  color: '#fff',
+                  background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+                  border: '2px solid rgba(255, 255, 255, 0.18)',
+                  color: '#ffffff',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   fontWeight: 700,
-                  fontSize: '0.95rem',
-                  boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)',
+                  fontSize: '1.05rem',
+                  boxShadow: '0 4px 14px rgba(0, 0, 0, 0.6)',
+                  flexShrink: 0,
+                  position: 'relative',
                 }}
               >
-                V
+                {media.title.charAt(0).toUpperCase()}
+                <div
+                  style={{
+                    position: 'absolute',
+                    bottom: '0px',
+                    right: '0px',
+                    width: '10px',
+                    height: '10px',
+                    borderRadius: '50%',
+                    backgroundColor: '#10b981',
+                    border: '2px solid #0f0f0f',
+                  }}
+                  title="Offline Direct Stream Active"
+                />
               </div>
-              <div>
-                <p style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
-                  Vesper Sanctuary Core
-                </p>
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>
-                  Local Storage • 0% CPU Hardware Direct Stream
-                </p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <span
+                    style={{
+                      fontSize: '0.98rem',
+                      fontWeight: 600,
+                      color: '#f1f1f1',
+                      letterSpacing: '0.1px',
+                    }}
+                  >
+                    Vesper Cinema
+                  </span>
+                  <CheckCircle2
+                    size={14}
+                    color="#0f0f0f"
+                    fill="#aaaaaa"
+                    style={{ flexShrink: 0 }}
+                  />
+                </div>
+                <span style={{ fontSize: '0.78rem', color: '#aaaaaa' }}>
+                  1.42M subscribers • 4K Direct Bitstream
+                </span>
               </div>
+
+              {/* YouTube Subscribe / Subscribed Button */}
+              <button
+                onClick={() => setIsSubscribed((prev) => !prev)}
+                style={{
+                  marginLeft: '8px',
+                  backgroundColor: isSubscribed ? 'rgba(255, 255, 255, 0.12)' : '#ffffff',
+                  color: isSubscribed ? '#f1f1f1' : '#0f0f0f',
+                  border: 'none',
+                  borderRadius: '20px',
+                  padding: '0 16px',
+                  height: '36px',
+                  fontSize: '0.86rem',
+                  fontWeight: 600,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  cursor: 'pointer',
+                  transition: 'background 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.15s ease',
+                  userSelect: 'none',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = isSubscribed
+                    ? 'rgba(255, 255, 255, 0.2)'
+                    : '#e5e5e5';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = isSubscribed
+                    ? 'rgba(255, 255, 255, 0.12)'
+                    : '#ffffff';
+                }}
+              >
+                {isSubscribed ? (
+                  <>
+                    <Bell size={15} />
+                    <span>Subscribed</span>
+                  </>
+                ) : (
+                  <span>Subscribe</span>
+                )}
+              </button>
             </div>
 
-            {/* Actions: Favorite, Share, Download, Delete */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-              <button
-                className="btn btn-secondary"
-                onClick={() => setIsFavorited(!isFavorited)}
+            {/* YouTube Standard Segmented Pill Action Bar */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              {/* Segmented Like / Dislike */}
+              <div
                 style={{
-                  padding: '0.45rem 0.85rem',
-                  fontSize: '0.8rem',
-                  color: isFavorited ? '#ff3b3b' : 'var(--text-secondary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                  borderRadius: '20px',
+                  overflow: 'hidden',
+                  height: '36px',
                 }}
               >
-                <Heart size={15} fill={isFavorited ? '#ff3b3b' : 'none'} />
-                <span>{isFavorited ? 'Liked' : 'Like'}</span>
-              </button>
+                <button
+                  onClick={handleToggleLike}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '7px',
+                    padding: '0 14px',
+                    height: '100%',
+                    background: 'none',
+                    border: 'none',
+                    color: isLiked ? '#ffffff' : '#f1f1f1',
+                    cursor: 'pointer',
+                    fontSize: '0.84rem',
+                    fontWeight: 600,
+                    borderRight: '1px solid rgba(255, 255, 255, 0.15)',
+                    transition: 'background 0.15s ease',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                  title="Like this movie"
+                >
+                  <ThumbsUp size={16} fill={isLiked ? '#ffffff' : 'none'} />
+                  <span>{formatCompactNumber(likeCount)}</span>
+                </button>
 
+                <button
+                  onClick={() => {
+                    setIsDisliked(!isDisliked);
+                    if (!isDisliked) setIsLiked(false);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '0 12px',
+                    height: '100%',
+                    background: 'none',
+                    border: 'none',
+                    color: isDisliked ? '#ffffff' : '#f1f1f1',
+                    cursor: 'pointer',
+                    transition: 'background 0.15s ease',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                  title="Dislike"
+                >
+                  <ThumbsDown size={16} fill={isDisliked ? '#ffffff' : 'none'} />
+                </button>
+              </div>
+
+              {/* Share Pill */}
               <button
-                className="btn btn-secondary"
                 onClick={handleShare}
-                style={{ padding: '0.45rem 0.85rem', fontSize: '0.8rem' }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '0 14px',
+                  height: '36px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                  border: 'none',
+                  borderRadius: '20px',
+                  color: '#f1f1f1',
+                  cursor: 'pointer',
+                  fontSize: '0.84rem',
+                  fontWeight: 600,
+                  transition: 'background 0.15s ease',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.18)')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)')}
+                title="Share direct streaming link"
               >
-                <Share2 size={15} />
+                {isCopied ? <Check size={15} color="#10b981" /> : <Share2 size={15} />}
                 <span>{isCopied ? 'Link Copied!' : 'Share'}</span>
               </button>
 
+              {/* Download Pill */}
               <a
                 href={streamUrl}
                 download={media.originalFilename}
-                className="btn btn-secondary"
-                style={{ padding: '0.45rem 0.85rem', fontSize: '0.8rem', textDecoration: 'none' }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '0 14px',
+                  height: '36px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                  border: 'none',
+                  borderRadius: '20px',
+                  color: '#f1f1f1',
+                  textDecoration: 'none',
+                  fontSize: '0.84rem',
+                  fontWeight: 600,
+                  transition: 'background 0.15s ease',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.18)')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)')}
+                title="Save video file to device"
               >
                 <Download size={15} />
                 <span>Download</span>
               </a>
 
-              {onDelete && (
+              {/* Save to Playlist / Vault Pill */}
+              <button
+                onClick={() => setIsSaved((prev) => !prev)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '0 14px',
+                  height: '36px',
+                  backgroundColor: isSaved ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.1)',
+                  border: 'none',
+                  borderRadius: '20px',
+                  color: '#f1f1f1',
+                  cursor: 'pointer',
+                  fontSize: '0.84rem',
+                  fontWeight: 600,
+                  transition: 'background 0.15s ease',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.22)')}
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.backgroundColor = isSaved ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.1)')
+                }
+                title="Save to watchlist"
+              >
+                <Bookmark size={15} fill={isSaved ? '#ffffff' : 'none'} />
+                <span>{isSaved ? 'Saved' : 'Save'}</span>
+              </button>
+
+              {/* Move to Google Photos / Family Video Button */}
+              {onReclassify && (
                 <button
-                  className="btn btn-ghost"
                   onClick={() => {
-                    if (window.confirm('Are you sure you want to permanently delete this video?')) {
-                      onDelete(media.id);
+                    if (window.confirm('Move this video to "Photos & Memories" (Family Videos)?')) {
+                      onReclassify(media.id, 'family');
                       onClose();
                     }
                   }}
-                  style={{ padding: '0.45rem 0.75rem', color: 'var(--accent-danger)', fontSize: '0.8rem' }}
-                  title="Delete Video"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '0 14px',
+                    height: '36px',
+                    backgroundColor: 'rgba(138, 180, 248, 0.12)',
+                    border: '1px solid rgba(138, 180, 248, 0.25)',
+                    borderRadius: '20px',
+                    color: '#8ab4f8',
+                    cursor: 'pointer',
+                    fontSize: '0.84rem',
+                    fontWeight: 600,
+                    transition: 'background 0.15s ease',
+                  }}
+                  title="Move to Google Photos (Family Video collection)"
                 >
-                  <Trash2 size={15} />
+                  <FolderSync size={15} />
+                  <span>Move to Memories</span>
                 </button>
               )}
+
+              {/* More Actions 3-dots popover */}
+              <div style={{ position: 'relative' }}>
+                <button
+                  onClick={() => setShowMoreMenu((prev) => !prev)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '50%',
+                    backgroundColor: showMoreMenu ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.1)',
+                    border: 'none',
+                    color: '#f1f1f1',
+                    cursor: 'pointer',
+                    transition: 'background 0.15s ease',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.18)')}
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.backgroundColor = showMoreMenu
+                      ? 'rgba(255, 255, 255, 0.2)'
+                      : 'rgba(255, 255, 255, 0.1)')
+                  }
+                  title="More actions"
+                >
+                  <MoreHorizontal size={18} />
+                </button>
+
+                {showMoreMenu && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      bottom: '44px',
+                      right: 0,
+                      width: '210px',
+                      backgroundColor: 'rgba(28, 28, 28, 0.98)',
+                      border: '1px solid #383838',
+                      borderRadius: '12px',
+                      padding: '6px 0',
+                      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.9)',
+                      backdropFilter: 'blur(16px)',
+                      zIndex: 60,
+                    }}
+                  >
+                    <div
+                      onClick={() => {
+                        setIsLooping(!isLooping);
+                        setShowMoreMenu(false);
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '10px 16px',
+                        cursor: 'pointer',
+                        fontSize: '0.84rem',
+                        color: '#ffffff',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.12)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <Repeat size={16} />
+                        <span>Loop Video</span>
+                      </div>
+                      {isLooping && <Check size={14} color="#ffffff" />}
+                    </div>
+
+                    {onDelete && (
+                      <div
+                        onClick={() => {
+                          setShowMoreMenu(false);
+                          if (window.confirm(`Permanently delete "${media.title}"?`)) {
+                            onDelete(media.id);
+                            onClose();
+                          }
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px',
+                          padding: '10px 16px',
+                          cursor: 'pointer',
+                          fontSize: '0.84rem',
+                          color: '#f87171',
+                          borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.15)')}
+                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                      >
+                        <Trash2 size={16} />
+                        <span>Delete Movie</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Expandable Description Box */}
+          {/* YouTube Sleek Description Card */}
           <div
             style={{
-              background: 'var(--bg-surface)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: 'var(--radius-md)',
-              padding: 'var(--space-4)',
+              backgroundColor: '#272727',
+              borderRadius: '12px',
+              padding: '14px 18px',
+              fontSize: '0.88rem',
+              lineHeight: 1.55,
+              color: '#f1f1f1',
+              cursor: 'pointer',
+              transition: 'background 0.15s ease',
             }}
+            onClick={() => setShowFullDesc(!showFullDesc)}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#303030')}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#272727')}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 'var(--space-2)' }}>
-              <span>{media.playCount} views</span>
-              <span>•</span>
-              <span>{new Date(media.createdAt).toLocaleDateString()}</span>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontWeight: 600,
+                marginBottom: '8px',
+                flexWrap: 'wrap',
+              }}
+            >
+              <span>{formatCompactNumber(media.playCount || 1)} views</span>
+              <span style={{ color: '#aaaaaa' }}>•</span>
+              <span>
+                {new Date(media.createdAt).toLocaleDateString(undefined, {
+                  year: 'numeric',
+                  month: 'short',
+                  day: 'numeric',
+                })}
+              </span>
+
+              {/* YouTube Style Hashtags */}
+              <span style={{ color: '#8ab4f8', fontWeight: 500 }}>
+                #VesperCinema #4KDirect #ZeroTranscode
+              </span>
+
               {media.categoryName && (
-                <span className="badge badge-subtle" style={{ fontSize: '0.72rem' }}>
+                <span
+                  style={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    fontSize: '0.74rem',
+                    fontWeight: 600,
+                    color: '#ffffff',
+                  }}
+                >
                   {media.categoryName}
                 </span>
               )}
             </div>
 
-            {media.description ? (
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: '1.6', margin: 0, whiteSpace: 'pre-wrap' }}>
-                {media.description}
-              </p>
-            ) : (
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>
-                No description provided for this video.
-              </p>
-            )}
+            {/* Tech Specs Badges */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+              <span
+                style={{
+                  fontSize: '0.7rem',
+                  fontWeight: 700,
+                  color: '#10b981',
+                  background: 'rgba(16, 185, 129, 0.12)',
+                  border: '1px solid rgba(16, 185, 129, 0.25)',
+                  padding: '2px 7px',
+                  borderRadius: '4px',
+                  letterSpacing: '0.5px',
+                }}
+              >
+                4K DIRECT PASSTHROUGH
+              </span>
 
-            {media.tags && media.tags.length > 0 && (
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: 'var(--space-3)' }}>
-                {media.tags.map((tag) => (
-                  <span key={tag} style={{ color: '#3b82f6', fontSize: '0.75rem', cursor: 'pointer' }}>
-                    #{tag}
-                  </span>
-                ))}
-              </div>
+              <span
+                style={{
+                  fontSize: '0.7rem',
+                  fontWeight: 700,
+                  color: '#38bdf8',
+                  background: 'rgba(56, 189, 248, 0.12)',
+                  border: '1px solid rgba(56, 189, 248, 0.25)',
+                  padding: '2px 7px',
+                  borderRadius: '4px',
+                  letterSpacing: '0.5px',
+                }}
+              >
+                0% CPU TRANSCODE
+              </span>
+
+              <span
+                style={{
+                  fontSize: '0.7rem',
+                  fontWeight: 700,
+                  color: '#94a3b8',
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  padding: '2px 7px',
+                  borderRadius: '4px',
+                }}
+              >
+                RFC-7233 512KB CHUNKS
+              </span>
+            </div>
+
+            <div style={{ whiteSpace: 'pre-wrap', color: '#e0e0e0', marginTop: '6px' }}>
+              {media.description ? (
+                showFullDesc ? (
+                  media.description
+                ) : (
+                  media.description.slice(0, 160) + (media.description.length > 160 ? '...' : '')
+                )
+              ) : (
+                <span style={{ color: '#aaaaaa' }}>
+                  Offline sanctuary playback. Direct bitstream streamed straight from high-speed storage without re-encoding or battery drain.
+                </span>
+              )}
+            </div>
+
+            {media.description && media.description.length > 160 && (
+              <span
+                style={{
+                  fontWeight: 600,
+                  color: '#f1f1f1',
+                  display: 'inline-block',
+                  marginTop: '8px',
+                  fontSize: '0.82rem',
+                }}
+              >
+                {showFullDesc ? 'Show less' : '...more'}
+              </span>
             )}
           </div>
 
-          {/* Related / More Videos Section */}
+          {/* Up Next / Related Movies (YouTube Desktop Grid / Mobile Feed) */}
           {relatedVideos.length > 0 && onSelectRelatedVideo && (
-            <div style={{ marginTop: 'var(--space-4)' }}>
-              <h4 style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 'var(--space-3)' }}>
-                More from your Nest
-              </h4>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 'var(--space-3)' }}>
+            <div style={{ marginTop: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 600, color: '#f1f1f1', margin: 0 }}>
+                  More in Movies Library
+                </h3>
+                <span style={{ fontSize: '0.78rem', color: '#aaaaaa' }}>
+                  {relatedVideos.length} recommendations
+                </span>
+              </div>
+
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+                  gap: '16px',
+                }}
+              >
                 {relatedVideos.slice(0, 4).map((rel) => (
                   <div
                     key={rel.id}
@@ -907,25 +1683,67 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
                     }}
                     style={{
                       cursor: 'pointer',
-                      background: 'var(--bg-surface)',
-                      borderRadius: 'var(--radius-sm)',
+                      borderRadius: '10px',
                       overflow: 'hidden',
-                      border: '1px solid var(--border-subtle)',
+                      backgroundColor: '#181818',
+                      border: '1px solid rgba(255, 255, 255, 0.08)',
+                      transition: 'transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.18s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'translateY(-3px)';
+                      e.currentTarget.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.8)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = 'none';
                     }}
                   >
-                    <div style={{ width: '100%', aspectRatio: '16/9', background: '#000' }}>
+                    <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', backgroundColor: '#000' }}>
                       <img
                         src={`/api/media/${rel.id}/thumbnail`}
                         alt={rel.title}
                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                       />
+                      {rel.duration && (
+                        <div
+                          style={{
+                            position: 'absolute',
+                            bottom: '8px',
+                            right: '8px',
+                            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                            color: '#ffffff',
+                            fontSize: '0.72rem',
+                            fontWeight: 600,
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            fontFamily: 'monospace',
+                            letterSpacing: '0.5px',
+                          }}
+                        >
+                          {formatTime(rel.duration)}
+                        </div>
+                      )}
                     </div>
-                    <div style={{ padding: 'var(--space-2) var(--space-3)' }}>
-                      <p style={{ fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: 0 }}>
+                    <div style={{ padding: '10px 12px' }}>
+                      <p
+                        style={{
+                          fontSize: '0.88rem',
+                          fontWeight: 600,
+                          color: '#f1f1f1',
+                          margin: 0,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
                         {rel.title}
                       </p>
-                      <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', margin: 0 }}>
-                        {rel.playCount} views
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
+                        <span style={{ fontSize: '0.76rem', color: '#aaaaaa' }}>Vesper Cinema</span>
+                        <CheckCircle2 size={11} color="#0f0f0f" fill="#aaaaaa" />
+                      </div>
+                      <p style={{ fontSize: '0.74rem', color: '#888888', margin: '3px 0 0 0' }}>
+                        {formatCompactNumber(rel.playCount || 1)} views • Stream Direct
                       </p>
                     </div>
                   </div>

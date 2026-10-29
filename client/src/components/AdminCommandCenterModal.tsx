@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   HardDrive,
@@ -53,6 +53,7 @@ export const AdminCommandCenterModal: React.FC<AdminCommandCenterModalProps> = (
 
   // Ingestion configuration
   const [targetDestination, setTargetDestination] = useState<'public' | 'vault'>('public');
+  const [ingestFiltrationMode, setIngestFiltrationMode] = useState<'auto' | 'movie' | 'family'>('auto');
   const [ingestCategoryId, setIngestCategoryId] = useState<string>('');
   const [isIngesting, setIsIngesting] = useState<boolean>(false);
   const [ingestProgress, setIngestProgress] = useState<{ current: number; total: number; currentFile: string } | null>(null);
@@ -66,6 +67,7 @@ export const AdminCommandCenterModal: React.FC<AdminCommandCenterModalProps> = (
   const [clearingCache, setClearingCache] = useState<boolean>(false);
   const [cacheMessage, setCacheMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const cancelIngestRef = useRef<boolean>(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -167,6 +169,10 @@ export const AdminCommandCenterModal: React.FC<AdminCommandCenterModalProps> = (
     setSelectedFilePaths(next);
   };
 
+  const handleCancelIngestion = () => {
+    cancelIngestRef.current = true;
+  };
+
   const handleIngestMedia = async () => {
     if (selectedFilePaths.size === 0) {
       setError('Please select at least one media file to ingest.');
@@ -174,38 +180,55 @@ export const AdminCommandCenterModal: React.FC<AdminCommandCenterModalProps> = (
     }
 
     setIsIngesting(true);
+    cancelIngestRef.current = false;
     setError(null);
     setIngestSummary(null);
 
     const fileList = Array.from(selectedFilePaths);
     setIngestProgress({ current: 0, total: fileList.length, currentFile: 'Initializing ingestion pipeline...' });
 
-    // Ingest in chunks of 15 files to ensure smooth streaming and live progress
-    const CHUNK_SIZE = 15;
+    // Ingest in compact chunks of 4 files for responsive live progress and low memory footprint
+    const CHUNK_SIZE = 4;
     let totalImported = 0;
     let totalFailed = 0;
 
     for (let i = 0; i < fileList.length; i += CHUNK_SIZE) {
+      if (cancelIngestRef.current) {
+        break;
+      }
+
       const chunk = fileList.slice(i, i + CHUNK_SIZE);
       const currentName = chunk[0]?.split(/[\\/]/).pop() || '';
+      const percent = Math.round((i / fileList.length) * 100);
+
       setIngestProgress({
         current: i,
         total: fileList.length,
-        currentFile: targetDestination === 'vault'
-          ? `Encrypting into Vault (AES-256): ${currentName}...`
-          : `Ingesting into Sanctuary: ${currentName}...`,
+        currentFile: `${percent}% • ${
+          targetDestination === 'vault'
+            ? `Encrypting into Vault (AES-256): ${currentName}`
+            : `Ingesting into Sanctuary: ${currentName}`
+        }`,
       });
+
+      // AbortController with 45-second timeout per batch to avoid infinite freeze
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 45000);
 
       try {
         const res = await fetch('/api/admin/drives/ingest', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
           body: JSON.stringify({
             filePaths: chunk,
             isPrivate: targetDestination === 'vault',
             categoryId: ingestCategoryId || undefined,
+            subType: ingestFiltrationMode,
           }),
         });
+
+        window.clearTimeout(timeoutId);
 
         const json = await res.json();
         if (res.ok && json.success) {
@@ -215,11 +238,16 @@ export const AdminCommandCenterModal: React.FC<AdminCommandCenterModalProps> = (
           totalFailed += chunk.length;
         }
       } catch {
+        window.clearTimeout(timeoutId);
         totalFailed += chunk.length;
       }
     }
 
-    setIngestProgress({ current: fileList.length, total: fileList.length, currentFile: 'Ingestion complete!' });
+    setIngestProgress({
+      current: fileList.length,
+      total: fileList.length,
+      currentFile: cancelIngestRef.current ? 'Ingestion stopped by user.' : 'Ingestion complete!',
+    });
     setIsIngesting(false);
     setIngestSummary({ imported: totalImported, failed: totalFailed });
 
@@ -859,6 +887,38 @@ export const AdminCommandCenterModal: React.FC<AdminCommandCenterModalProps> = (
                       </div>
                     </div>
 
+                    {/* Auto-Filtration Separation Mode */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', margin: 0 }}>
+                        Auto-Filtration & Separation Mode:
+                      </label>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px' }}>
+                        {[
+                          { id: 'auto', title: '✨ Smart Auto-Filter', desc: 'Auto path & length' },
+                          { id: 'movie', title: '🎬 Force to Movies', desc: 'YouTube Cinema' },
+                          { id: 'family', title: '📷 Force to Memories', desc: 'Google Photos' },
+                        ].map((m) => (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => setIngestFiltrationMode(m.id as any)}
+                            style={{
+                              padding: '6px 10px',
+                              borderRadius: '6px',
+                              border: ingestFiltrationMode === m.id ? '1px solid #38bdf8' : '1px solid var(--border-subtle)',
+                              background: ingestFiltrationMode === m.id ? 'rgba(56, 189, 248, 0.12)' : 'transparent',
+                              color: ingestFiltrationMode === m.id ? '#38bdf8' : 'var(--text-muted)',
+                              cursor: 'pointer',
+                              textAlign: 'left',
+                            }}
+                          >
+                            <div style={{ fontSize: '0.76rem', fontWeight: 600 }}>{m.title}</div>
+                            <div style={{ fontSize: '0.65rem', opacity: 0.8 }}>{m.desc}</div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
                     {/* Optional Category */}
                     {categories.length > 0 && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -932,8 +992,24 @@ export const AdminCommandCenterModal: React.FC<AdminCommandCenterModalProps> = (
                     </div>
                   )}
 
-                  {/* Ingest Action Button */}
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                  {/* Ingest Action Buttons */}
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px' }}>
+                    {isIngesting && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        onClick={handleCancelIngestion}
+                        style={{
+                          color: '#f87171',
+                          borderColor: 'rgba(239, 68, 68, 0.3)',
+                          padding: '0.55rem 1rem',
+                          fontSize: '0.84rem',
+                        }}
+                      >
+                        Cancel Ingest
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       className="btn btn-primary"

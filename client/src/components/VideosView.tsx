@@ -5,14 +5,20 @@ import type { MediaItem } from '@media-hub/shared';
 interface VideosViewProps {
   videos: MediaItem[];
   onSelectVideo: (video: MediaItem) => void;
-  onOpenUpload: () => void;
+  onOpenUpload?: () => void;
+  canAccessVault?: boolean;
 }
 
-export const VideosView: React.FC<VideosViewProps> = ({ videos, onSelectVideo, onOpenUpload }) => {
+export const VideosView: React.FC<VideosViewProps> = ({
+  videos,
+  onSelectVideo,
+  onOpenUpload,
+  canAccessVault = true,
+}) => {
   const [selectedChip, setSelectedChip] = useState<'all' | '4k' | 'recent' | 'vault'>('all');
 
   const formatDuration = (seconds?: number | null): string => {
-    if (!seconds || seconds <= 0) return '4K DIRECT';
+    if (!seconds || isNaN(seconds) || !isFinite(seconds) || seconds <= 0) return '4K DIRECT';
     const hrs = Math.floor(seconds / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
     const secs = Math.floor(seconds % 60);
@@ -64,18 +70,29 @@ export const VideosView: React.FC<VideosViewProps> = ({ videos, onSelectVideo, o
           <Film size={32} />
         </div>
         <h3 style={{ fontSize: '1.3rem', fontWeight: 700, color: '#ffffff', marginBottom: 'var(--space-2)' }}>
-          No Videos in Library
+          No Movies in Cinema Library
         </h3>
         <p style={{ fontSize: '0.9rem', color: '#aaaaaa', maxWidth: '420px', marginBottom: 'var(--space-6)', lineHeight: 1.5 }}>
-          Upload movies, shows, and clips. Direct 4K streaming plays instantly on your phone with zero CPU transcoding.
+          {onOpenUpload
+            ? 'Upload movies, feature films, and shows. Stream in direct 4K UHD with the elegant YouTube-style cinema player.'
+            : 'No movies are currently available in the sanctuary.'}
         </p>
-        <button className="btn btn-youtube" onClick={onOpenUpload} style={{ padding: '0.8rem 1.8rem', fontSize: '0.95rem' }}>
-          <Upload size={18} />
-          <span>Upload Video</span>
-        </button>
+        {onOpenUpload && (
+          <button className="btn btn-youtube" onClick={onOpenUpload} style={{ padding: '0.8rem 1.8rem', fontSize: '0.95rem' }}>
+            <Upload size={18} />
+            <span>Upload Movie</span>
+          </button>
+        )}
       </div>
     );
   }
+
+  const chips: Array<{ id: 'all' | '4k' | 'recent' | 'vault'; label: string }> = [
+    { id: 'all', label: 'All Movies' },
+    { id: '4k', label: '4K Ultra HD' },
+    { id: 'recent', label: 'Recently Added' },
+    ...(canAccessVault ? [{ id: 'vault' as const, label: 'Vault Partition' }] : []),
+  ];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
@@ -89,12 +106,7 @@ export const VideosView: React.FC<VideosViewProps> = ({ videos, onSelectVideo, o
           scrollbarWidth: 'none',
         }}
       >
-        {[
-          { id: 'all', label: 'All Videos' },
-          { id: '4k', label: '4K Ultra HD' },
-          { id: 'recent', label: 'Recently Added' },
-          { id: 'vault', label: 'Vault Partition' },
-        ].map((chip) => {
+        {chips.map((chip) => {
           const isActive = selectedChip === chip.id;
           return (
             <button

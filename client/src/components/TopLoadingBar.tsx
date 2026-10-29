@@ -23,9 +23,9 @@ export const TopLoadingBar: React.FC<TopLoadingBarProps> = ({ isLoading }) => {
       <div
         style={{
           height: '100%',
-          background: 'linear-gradient(90deg, #ff0000 0%, #ff4b4b 50%, #ffffff 100%)',
-          boxShadow: '0 0 10px rgba(255, 0, 0, 0.7), 0 0 5px #ff4b4b',
-          animation: 'ytLoading 1.2s infinite ease-in-out',
+          background: 'linear-gradient(90deg, #6366f1 0%, #38bdf8 50%, #10b981 100%)',
+          boxShadow: '0 0 12px rgba(56, 189, 248, 0.7), 0 0 6px #10b981',
+          animation: 'ytLoading 1.2s infinite cubic-bezier(0.25, 1, 0.5, 1)',
         }}
       />
       <style>{`

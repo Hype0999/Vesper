@@ -37,9 +37,9 @@ export const VaultView: React.FC<VaultViewProps> = ({
   const { isUnlocked, openUnlockModal, lockVault, isLoading } = useVault();
   const [subTab, setSubTab] = useState<'all' | 'videos' | 'songs' | 'photos' | 'notes'>('all');
 
-  const privateVideos = media.filter((m) => m.isPrivate && m.type === 'video');
+  const privateMovies = media.filter((m) => m.isPrivate && m.type === 'video' && m.subType !== 'family');
+  const privateMemories = media.filter((m) => m.isPrivate && (m.type === 'photo' || (m.type === 'video' && m.subType === 'family')));
   const privateSongs = media.filter((m) => m.isPrivate && m.type === 'audio');
-  const privatePhotos = media.filter((m) => m.isPrivate && m.type === 'photo');
   const privateNotes = notes.filter((n) => n.isPrivate);
 
   if (!isUnlocked) {
@@ -139,7 +139,7 @@ export const VaultView: React.FC<VaultViewProps> = ({
               Private Vault Partition
             </h4>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>
-              {privateVideos.length} Videos • {privateSongs.length} Songs • {privatePhotos.length} Photos • {privateNotes.length} Notes (Isolated from public feed)
+              {privateMovies.length} Movies • {privateMemories.length} Memories • {privateSongs.length} Songs • {privateNotes.length} Notes (Isolated from public feed)
             </p>
           </div>
         </div>
@@ -180,7 +180,15 @@ export const VaultView: React.FC<VaultViewProps> = ({
           style={{ fontSize: '0.8rem', padding: '0.35rem 0.75rem' }}
         >
           <Film size={13} />
-          <span>Videos ({privateVideos.length})</span>
+          <span>Movies ({privateMovies.length})</span>
+        </button>
+        <button
+          className={`btn ${subTab === 'photos' ? 'btn-primary' : 'btn-ghost'}`}
+          onClick={() => setSubTab('photos')}
+          style={{ fontSize: '0.8rem', padding: '0.35rem 0.75rem' }}
+        >
+          <ImageIcon size={13} />
+          <span>Memories ({privateMemories.length})</span>
         </button>
         <button
           className={`btn ${subTab === 'songs' ? 'btn-primary' : 'btn-ghost'}`}
@@ -189,14 +197,6 @@ export const VaultView: React.FC<VaultViewProps> = ({
         >
           <Music size={13} />
           <span>Songs ({privateSongs.length})</span>
-        </button>
-        <button
-          className={`btn ${subTab === 'photos' ? 'btn-primary' : 'btn-ghost'}`}
-          onClick={() => setSubTab('photos')}
-          style={{ fontSize: '0.8rem', padding: '0.35rem 0.75rem' }}
-        >
-          <ImageIcon size={13} />
-          <span>Photos ({privatePhotos.length})</span>
         </button>
         <button
           className={`btn ${subTab === 'notes' ? 'btn-primary' : 'btn-ghost'}`}
@@ -211,12 +211,21 @@ export const VaultView: React.FC<VaultViewProps> = ({
       {/* Content Rendering */}
       {subTab === 'all' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-          {privateVideos.length > 0 && (
+          {privateMovies.length > 0 && (
             <div>
               <h4 style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 'var(--space-3)' }}>
-                Private Videos
+                Private Movies & Cinema
               </h4>
-              <VideosView videos={privateVideos} onSelectVideo={onSelectVideo} onOpenUpload={onOpenUpload} />
+              <VideosView videos={privateMovies} onSelectVideo={onSelectVideo} onOpenUpload={onOpenUpload} />
+            </div>
+          )}
+
+          {privateMemories.length > 0 && (
+            <div>
+              <h4 style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 'var(--space-3)' }}>
+                Private Photos & Family Memories
+              </h4>
+              <PhotosView photos={privateMemories} onSelectPhoto={onSelectPhoto} onOpenUpload={onOpenUpload} />
             </div>
           )}
 
@@ -236,15 +245,6 @@ export const VaultView: React.FC<VaultViewProps> = ({
             </div>
           )}
 
-          {privatePhotos.length > 0 && (
-            <div>
-              <h4 style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 'var(--space-3)' }}>
-                Private Photos
-              </h4>
-              <PhotosView photos={privatePhotos} onSelectPhoto={onSelectPhoto} onOpenUpload={onOpenUpload} />
-            </div>
-          )}
-
           {privateNotes.length > 0 && (
             <div>
               <h4 style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 'var(--space-3)' }}>
@@ -254,7 +254,7 @@ export const VaultView: React.FC<VaultViewProps> = ({
             </div>
           )}
 
-          {privateVideos.length === 0 && privateSongs.length === 0 && privatePhotos.length === 0 && privateNotes.length === 0 && (
+          {privateMovies.length === 0 && privateMemories.length === 0 && privateSongs.length === 0 && privateNotes.length === 0 && (
             <div className="card" style={{ textAlign: 'center', padding: 'var(--space-8)' }}>
               <p style={{ color: 'var(--text-muted)', margin: 0 }}>
                 Your private vault is currently empty. Check "Mark as Private" when uploading or creating notes to store items here.
@@ -265,7 +265,7 @@ export const VaultView: React.FC<VaultViewProps> = ({
       )}
 
       {subTab === 'videos' && (
-        <VideosView videos={privateVideos} onSelectVideo={onSelectVideo} onOpenUpload={onOpenUpload} />
+        <VideosView videos={privateMovies} onSelectVideo={onSelectVideo} onOpenUpload={onOpenUpload} />
       )}
 
       {subTab === 'songs' && (
@@ -280,7 +280,7 @@ export const VaultView: React.FC<VaultViewProps> = ({
       )}
 
       {subTab === 'photos' && (
-        <PhotosView photos={privatePhotos} onSelectPhoto={onSelectPhoto} onOpenUpload={onOpenUpload} />
+        <PhotosView photos={privateMemories} onSelectPhoto={onSelectPhoto} onOpenUpload={onOpenUpload} />
       )}
 
       {subTab === 'notes' && (

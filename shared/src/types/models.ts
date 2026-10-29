@@ -1,4 +1,5 @@
 export type MediaType = 'video' | 'photo' | 'audio';
+export type MediaSubType = 'movie' | 'family' | 'photo' | 'music';
 
 export interface WifiNetwork {
   ssid: string;
@@ -36,6 +37,7 @@ export interface MediaItem {
   id: string;
   userId: string;
   type: MediaType;
+  subType?: MediaSubType;
   title: string;
   description: string | null;
   categoryId: string | null;
@@ -124,6 +126,7 @@ export interface DiscoveredMediaFile {
   fileName: string;
   fileSize: number;
   type: MediaType;
+  subType?: MediaSubType;
   extension: string;
   mimeType: string;
   parentDir: string;

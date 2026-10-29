@@ -9,7 +9,7 @@ interface SongsViewProps {
   onSelectSong: (song: MediaItem) => void;
   onDeleteSong?: (id: string) => void;
   onTogglePlay?: () => void;
-  onOpenUpload: () => void;
+  onOpenUpload?: () => void;
 }
 
 export const SongsView: React.FC<SongsViewProps> = ({
@@ -84,12 +84,16 @@ export const SongsView: React.FC<SongsViewProps> = ({
           Your Music Sanctuary is Empty
         </h3>
         <p style={{ fontSize: '0.9rem', color: '#b3b3b3', maxWidth: '420px', marginBottom: 'var(--space-6)', lineHeight: 1.5 }}>
-          Upload your favorite FLAC, MP3, AAC, and M4A audio files for offline, zero-transcode playback during train travel.
+          {onOpenUpload
+            ? 'Upload your favorite FLAC, MP3, AAC, and M4A audio files for offline, zero-transcode playback during train travel.'
+            : 'No music tracks are currently available in the sanctuary.'}
         </p>
-        <button className="btn btn-spotify" onClick={onOpenUpload} style={{ padding: '0.8rem 1.8rem', fontSize: '0.95rem' }}>
-          <Upload size={18} />
-          <span>Upload Music</span>
-        </button>
+        {onOpenUpload && (
+          <button className="btn btn-spotify" onClick={onOpenUpload} style={{ padding: '0.8rem 1.8rem', fontSize: '0.95rem' }}>
+            <Upload size={18} />
+            <span>Upload Music</span>
+          </button>
+        )}
       </div>
     );
   }

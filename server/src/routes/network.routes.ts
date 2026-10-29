@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { authenticateUser } from '../middleware/auth.js';
+import { authenticateUser, requireAdmin } from '../middleware/auth.js';
 import { getNetworkService } from '../services/network.service.js';
 import type { ApiResponse, NetworkStatus, WifiNetwork } from '@media-hub/shared';
 
@@ -26,10 +26,10 @@ export const networkRoutes: FastifyPluginAsync = async (fastify) => {
     } satisfies ApiResponse<{ networks: WifiNetwork[] }>);
   });
 
-  // 3. Connect to a Wi-Fi network (phone hotspot or train Wi-Fi)
+  // 3. Connect to a Wi-Fi network (phone hotspot or train Wi-Fi - Admin only)
   fastify.post<{
     Body: { ssid: string; password?: string };
-  }>('/connect', async (request, reply) => {
+  }>('/connect', { preHandler: requireAdmin }, async (request, reply) => {
     const { ssid, password } = request.body || {};
     if (!ssid || !ssid.trim()) {
       return reply.status(400).send({

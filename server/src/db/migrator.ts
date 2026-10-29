@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3';
 import { logger } from '../utils/logger.js';
 import { migration as initialMigration } from './migrations/001_initial_schema.js';
 import { migration as migration002 } from './migrations/002_add_audio_and_user_roles.js';
+import { migration as migration003 } from './migrations/003_add_media_subtype_and_path_filter.js';
 
 export interface Migration {
   version: number;
@@ -19,7 +20,7 @@ export class MigrationRunner {
   private readonly migrations: Migration[];
 
   constructor(customMigrations?: Migration[]) {
-    this.migrations = customMigrations ?? [initialMigration, migration002];
+    this.migrations = customMigrations ?? [initialMigration, migration002, migration003];
     // Ensure sorted monotonically
     this.migrations.sort((a, b) => a.version - b.version);
   }

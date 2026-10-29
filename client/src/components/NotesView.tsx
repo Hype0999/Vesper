@@ -5,7 +5,7 @@ import type { NoteItem } from '@media-hub/shared';
 interface NotesViewProps {
   notes: NoteItem[];
   onSelectNote: (note: NoteItem) => void;
-  onOpenNewNote: () => void;
+  onOpenNewNote?: () => void;
 }
 
 export const NotesView: React.FC<NotesViewProps> = ({ notes, onSelectNote, onOpenNewNote }) => {
@@ -42,12 +42,16 @@ export const NotesView: React.FC<NotesViewProps> = ({ notes, onSelectNote, onOpe
           No notes yet
         </h3>
         <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', maxWidth: '380px', marginBottom: 'var(--space-5)' }}>
-          Write down thoughts, checklists, or private encrypted notes with Markdown support.
+          {onOpenNewNote
+            ? 'Write down thoughts, checklists, or private encrypted notes with Markdown support.'
+            : 'No notes are currently available in the sanctuary.'}
         </p>
-        <button className="btn btn-primary" onClick={onOpenNewNote}>
-          <Plus size={16} />
-          <span>New Note</span>
-        </button>
+        {onOpenNewNote && (
+          <button className="btn btn-primary" onClick={onOpenNewNote}>
+            <Plus size={16} />
+            <span>New Note</span>
+          </button>
+        )}
       </div>
     );
   }

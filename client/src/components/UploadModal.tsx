@@ -46,6 +46,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 }) => {
   const { isUnlocked, unlockVault } = useVault();
   const [fileQueue, setFileQueue] = useState<QueuedFile[]>([]);
+  const [destination, setDestination] = useState<'auto' | 'movie' | 'family'>('auto');
   const [categoryId, setCategoryId] = useState<string>('');
   const [isPrivate, setIsPrivate] = useState<boolean>(false);
   const [vaultPassphrase, setVaultPassphrase] = useState<string>('');
@@ -64,6 +65,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   useEffect(() => {
     if (!isOpen) {
       setFileQueue([]);
+      setDestination('auto');
       setCategoryId('');
       setIsPrivate(false);
       setVaultPassphrase('');
@@ -288,15 +290,36 @@ export const UploadModal: React.FC<UploadModalProps> = ({
         resolve({ success: false, error: msg });
       });
 
+      xhr.addEventListener('timeout', () => {
+        const msg = 'Upload timed out. Try again or check network';
+        setFileQueue((prev) =>
+          prev.map((q, idx) =>
+            idx === index
+              ? {
+                  ...q,
+                  status: 'error',
+                  errorMessage: msg,
+                  statusText: 'Upload timed out',
+                }
+              : q
+          )
+        );
+        resolve({ success: false, error: msg });
+      });
+
+      xhr.timeout = 180000;
+
       const qParams = new URLSearchParams();
       qParams.set('title', item.title.trim() || item.file.name);
       if (categoryId) qParams.set('categoryId', categoryId);
       if (isPrivate) qParams.set('isPrivate', 'true');
+      if (destination !== 'auto') qParams.set('subType', destination);
 
       const formData = new FormData();
       formData.append('title', item.title.trim() || item.file.name);
       if (categoryId) formData.append('categoryId', categoryId);
       formData.append('isPrivate', isPrivate ? 'true' : 'false');
+      if (destination !== 'auto') formData.append('subType', destination);
       if (tags.trim()) formData.append('tags', tags.trim());
       formData.append('file', item.file);
 
@@ -705,6 +728,73 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 
           {/* Form Options */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
+            {/* Auto-filtration & Destination Selection */}
+            <div>
+              <label className="label" style={{ marginBottom: '6px' }}>Destination & Auto-Filtration</label>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setDestination('auto')}
+                  style={{
+                    padding: '8px',
+                    borderRadius: '8px',
+                    border: destination === 'auto' ? '1px solid #38bdf8' : '1px solid var(--border-subtle)',
+                    background: destination === 'auto' ? 'rgba(56, 189, 248, 0.12)' : 'var(--bg-surface)',
+                    color: destination === 'auto' ? '#38bdf8' : 'var(--text-secondary)',
+                    cursor: 'pointer',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    textAlign: 'left',
+                  }}
+                >
+                  <div>✨ Smart Auto-Filter</div>
+                  <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 400 }}>
+                    Films to Cinema, clips to Memories
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDestination('movie')}
+                  style={{
+                    padding: '8px',
+                    borderRadius: '8px',
+                    border: destination === 'movie' ? '1px solid #ff3b3b' : '1px solid var(--border-subtle)',
+                    background: destination === 'movie' ? 'rgba(255, 59, 59, 0.12)' : 'var(--bg-surface)',
+                    color: destination === 'movie' ? '#ff4b4b' : 'var(--text-secondary)',
+                    cursor: 'pointer',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    textAlign: 'left',
+                  }}
+                >
+                  <div>🎬 Movie / Cinema</div>
+                  <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 400 }}>
+                    YouTube-style player
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDestination('family')}
+                  style={{
+                    padding: '8px',
+                    borderRadius: '8px',
+                    border: destination === 'family' ? '1px solid #8ab4f8' : '1px solid var(--border-subtle)',
+                    background: destination === 'family' ? 'rgba(138, 180, 248, 0.12)' : 'var(--bg-surface)',
+                    color: destination === 'family' ? '#8ab4f8' : 'var(--text-secondary)',
+                    cursor: 'pointer',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    textAlign: 'left',
+                  }}
+                >
+                  <div>📷 Google Photos</div>
+                  <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 400 }}>
+                    Family videos & photos
+                  </div>
+                </button>
+              </div>
+            </div>
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
               {/* Category selector */}
               <div>

@@ -41,6 +41,7 @@ export class MediaService {
     description?: string;
     categoryId?: string;
     isPrivate: boolean;
+    subType?: 'movie' | 'family' | 'photo' | 'music';
     tags?: string[];
   }): Promise<MediaItem> {
     const mediaId = crypto.randomUUID();
@@ -58,6 +59,27 @@ export class MediaService {
       else if (ext === '.flac') resolvedMime = 'audio/flac';
       else if (ext === '.wav') resolvedMime = 'audio/wav';
       else if (ext === '.ogg' || ext === '.opus') resolvedMime = 'audio/ogg';
+    }
+
+    let finalSubType: 'movie' | 'family' | 'photo' | 'music' = options.subType || (mediaType === 'photo' ? 'photo' : mediaType === 'audio' ? 'music' : 'movie');
+    if (!options.subType && isVideo) {
+      const lower = (options.originalFilename + ' ' + options.title).toLowerCase();
+      if (
+        lower.includes('dcim') ||
+        lower.includes('camera') ||
+        lower.includes('family') ||
+        lower.includes('phone') ||
+        lower.includes('whatsapp') ||
+        lower.includes('trip') ||
+        lower.includes('memory') ||
+        lower.includes('clip') ||
+        lower.startsWith('vid_') ||
+        lower.startsWith('mov_') ||
+        lower.startsWith('pxl_') ||
+        lower.startsWith('img_')
+      ) {
+        finalSubType = 'family';
+      }
     }
 
     const targetMediaDir = options.isPrivate ? this.mediaPrivateDir : this.mediaNormalDir;
@@ -113,7 +135,7 @@ export class MediaService {
             '-an',
             '-vcodec', 'copy',
             tempArtworkPath,
-          ]);
+          ], { timeout: 6000 });
           if (fs.existsSync(tempArtworkPath) && fs.statSync(tempArtworkPath).size > 100) {
             await sharp(tempArtworkPath)
               .resize(480, 480, { fit: 'cover' })
@@ -189,7 +211,7 @@ export class MediaService {
             '-vframes', '1',
             '-vf', 'scale=480:270:force_original_aspect_ratio=increase,crop=480:270',
             thumbPath,
-          ]);
+          ], { timeout: 7000 });
         } catch {
           await execFileAsync(ffmpegPath, [
             '-y',
@@ -198,7 +220,7 @@ export class MediaService {
             '-vframes', '1',
             '-vf', 'scale=480:270:force_original_aspect_ratio=increase,crop=480:270',
             thumbPath,
-          ]);
+          ], { timeout: 7000 });
         }
         hasThumbnail = fs.existsSync(thumbPath);
       } catch (err) {
@@ -256,12 +278,12 @@ export class MediaService {
 
     const insertMedia = db.prepare(`
       INSERT INTO media (
-        id, user_id, type, title, description, category_id, is_private,
+        id, user_id, type, sub_type, title, description, category_id, is_private,
         storage_path, thumbnail_path, file_size, mime_type, original_filename,
         file_extension, width, height, duration, play_count, is_favorite,
         created_at, updated_at
       ) VALUES (
-        ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?, ?, ?,
         ?, ?, ?, ?, ?,
         ?, ?, ?, ?, 0, 0,
         ?, ?
@@ -272,6 +294,7 @@ export class MediaService {
       mediaId,
       options.userId,
       mediaType,
+      finalSubType,
       options.title,
       options.description ?? null,
       options.categoryId ?? null,
@@ -330,6 +353,7 @@ export class MediaService {
   async getMediaList(options: {
     userId: string;
     type?: MediaType;
+    subType?: 'movie' | 'family' | 'photo' | 'music';
     categoryId?: string;
     isVaultUnlocked: boolean;
     vaultOnly?: boolean;
@@ -346,6 +370,16 @@ export class MediaService {
       WHERE 1=1
     `;
     const params: (string | number)[] = [options.userId];
+
+    if (options.type) {
+      query += ` AND m.type = ?`;
+      params.push(options.type);
+    }
+
+    if (options.subType) {
+      query += ` AND m.sub_type = ?`;
+      params.push(options.subType);
+    }
 
     if (options.vaultOnly) {
       if (!options.isVaultUnlocked) return [];
@@ -372,6 +406,7 @@ export class MediaService {
       id: string;
       user_id: string;
       type: string;
+      sub_type?: string | null;
       title: string;
       description: string | null;
       category_id: string | null;
@@ -398,6 +433,7 @@ export class MediaService {
       id: r.id,
       userId: r.user_id,
       type: r.type as MediaType,
+      subType: (r.sub_type as any) || (r.type === 'photo' ? 'photo' : r.type === 'audio' ? 'music' : 'movie'),
       title: r.title,
       description: r.description,
       categoryId: r.category_id,
@@ -441,6 +477,7 @@ export class MediaService {
       id: row.id as string,
       userId: row.user_id as string,
       type: row.type as MediaType,
+      subType: (row.sub_type as any) || (row.type === 'photo' ? 'photo' : row.type === 'audio' ? 'music' : 'movie'),
       title: row.title as string,
       description: row.description as string | null,
       categoryId: row.category_id as string | null,
@@ -601,6 +638,65 @@ export class MediaService {
     } catch { /* ignore */ }
 
     return true;
+  }
+
+  async updateMedia(
+    id: string,
+    userId: string,
+    updates: {
+      title?: string;
+      description?: string;
+      categoryId?: string | null;
+      isFavorite?: boolean;
+      subType?: 'movie' | 'family' | 'photo' | 'music';
+    }
+  ): Promise<MediaItem | null> {
+    const db = getDatabaseService().getDb();
+    const existing = await this.getMediaById(id, userId, true);
+    if (!existing) return null;
+
+    const fields: string[] = [];
+    const params: any[] = [];
+
+    if (updates.title !== undefined) {
+      fields.push('title = ?');
+      params.push(updates.title);
+    }
+    if (updates.description !== undefined) {
+      fields.push('description = ?');
+      params.push(updates.description);
+    }
+    if (updates.categoryId !== undefined) {
+      fields.push('category_id = ?');
+      params.push(updates.categoryId);
+    }
+    if (updates.isFavorite !== undefined) {
+      fields.push('is_favorite = ?');
+      params.push(updates.isFavorite ? 1 : 0);
+    }
+    if (updates.subType !== undefined) {
+      fields.push('sub_type = ?');
+      params.push(updates.subType);
+    }
+
+    if (fields.length > 0) {
+      fields.push('updated_at = ?');
+      params.push(new Date().toISOString());
+      params.push(id, userId);
+
+      db.prepare(`UPDATE media SET ${fields.join(', ')} WHERE id = ? AND user_id = ?`).run(...params);
+    }
+
+    return this.getMediaById(id, userId, true);
+  }
+
+  async batchDeleteMedia(ids: string[], userId: string, isVaultUnlocked: boolean): Promise<number> {
+    let count = 0;
+    for (const id of ids) {
+      const deleted = await this.deleteMedia(id, userId, isVaultUnlocked);
+      if (deleted) count++;
+    }
+    return count;
   }
 
   savePlaybackProgress(userId: string, mediaId: string, positionSeconds: number, durationSeconds: number): void {

@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { VaultUnlockSchema, type ApiResponse, type VaultStatus } from '@media-hub/shared';
-import { authenticateUser } from '../middleware/auth.js';
+import { authenticateUser, requireVaultRole } from '../middleware/auth.js';
 import { requireVaultAuth } from '../middleware/vault-auth.js';
 import { getDatabaseService } from '../db/index.js';
 import { verifyPassword, generateSecureToken, hashToken } from '../utils/crypto.js';
@@ -9,6 +9,13 @@ import { env } from '../config/env.js';
 export const vaultRoutes: FastifyPluginAsync = async (fastify) => {
   // Check private vault unlock status
   fastify.get('/status', { preHandler: authenticateUser }, async (request, reply) => {
+    if (request.user?.role === 'guest') {
+      return reply.send({
+        success: true,
+        data: { isUnlocked: false, remainingSeconds: 0 },
+      } satisfies ApiResponse<VaultStatus>);
+    }
+
     const rawVaultToken = request.cookies['vault_session'];
 
     if (!rawVaultToken || !request.sessionTokenHash || !request.user) {
@@ -63,8 +70,8 @@ export const vaultRoutes: FastifyPluginAsync = async (fastify) => {
     } satisfies ApiResponse<VaultStatus>);
   });
 
-  // Step-up unlock authorization using vault passphrase
-  fastify.post('/unlock', { preHandler: authenticateUser }, async (request, reply) => {
+  // Step-up unlock authorization using vault passphrase (Member/Admin only)
+  fastify.post('/unlock', { preHandler: requireVaultRole }, async (request, reply) => {
     const parseResult = VaultUnlockSchema.safeParse(request.body);
     if (!parseResult.success) {
       return reply.status(400).send({

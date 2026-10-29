@@ -98,3 +98,31 @@ export async function requireAdmin(request: FastifyRequest, reply: FastifyReply)
     } satisfies ApiErrorResponse);
   }
 }
+
+export async function requireWriteAccess(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await authenticateUser(request, reply);
+  if (reply.sent) return;
+  if (request.user?.role === 'guest') {
+    return reply.status(403).send({
+      success: false,
+      error: {
+        code: 'FORBIDDEN',
+        message: 'Guest accounts have read-only access. Uploading or modifying content is disabled.',
+      },
+    } satisfies ApiErrorResponse);
+  }
+}
+
+export async function requireVaultRole(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await authenticateUser(request, reply);
+  if (reply.sent) return;
+  if (request.user?.role === 'guest') {
+    return reply.status(403).send({
+      success: false,
+      error: {
+        code: 'FORBIDDEN',
+        message: 'Guest accounts do not have access to the private vault.',
+      },
+    } satisfies ApiErrorResponse);
+  }
+}

@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { authenticateUser } from '../middleware/auth.js';
+import { authenticateUser, requireWriteAccess } from '../middleware/auth.js';
 import { getCategoriesService } from '../services/categories.service.js';
 
 export const categoriesRoutes: FastifyPluginAsync = async (fastify) => {
@@ -15,8 +15,8 @@ export const categoriesRoutes: FastifyPluginAsync = async (fastify) => {
     });
   });
 
-  // 2. Create category
-  fastify.post<{ Body: { name: string; color?: string } }>('/', async (request, reply) => {
+  // 2. Create category (Member/Admin only)
+  fastify.post<{ Body: { name: string; color?: string } }>('/', { preHandler: requireWriteAccess }, async (request, reply) => {
     const { name, color } = request.body || {};
     if (!name || !name.trim()) {
       return reply.status(400).send({
@@ -39,8 +39,8 @@ export const categoriesRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  // 3. Delete category
-  fastify.delete<{ Params: { id: string } }>('/:id', async (request, reply) => {
+  // 3. Delete category (Member/Admin only)
+  fastify.delete<{ Params: { id: string } }>('/:id', { preHandler: requireWriteAccess }, async (request, reply) => {
     categoriesService.deleteCategory(request.user!.id, request.params.id);
     return reply.send({ success: true });
   });

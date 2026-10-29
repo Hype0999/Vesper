@@ -66,13 +66,23 @@ export const SkeletonGrid: React.FC<{ count?: number }> = ({ count = 6 }) => {
         </div>
       ))}
       <style>{`
-        @keyframes shimmerPulse {
-          0% { opacity: 0.6; }
-          50% { opacity: 0.25; }
-          100% { opacity: 0.6; }
+        @keyframes liquidShimmer {
+          0% {
+            background-position: -200% 0;
+          }
+          100% {
+            background-position: 200% 0;
+          }
         }
         .skeleton-shimmer {
-          animation: shimmerPulse 1.5s ease-in-out infinite;
+          background: linear-gradient(
+            90deg,
+            rgba(255, 255, 255, 0.04) 0%,
+            rgba(255, 255, 255, 0.12) 50%,
+            rgba(255, 255, 255, 0.04) 100%
+          ) !important;
+          background-size: 200% 100% !important;
+          animation: liquidShimmer 1.8s cubic-bezier(0.25, 1, 0.5, 1) infinite !important;
         }
       `}</style>
     </div>

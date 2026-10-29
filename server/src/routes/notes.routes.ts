@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { authenticateUser } from '../middleware/auth.js';
+import { authenticateUser, requireWriteAccess } from '../middleware/auth.js';
 import { checkVaultAuth } from '../middleware/vault-auth.js';
 import { getNotesService } from '../services/notes.service.js';
 import type { ApiResponse, NoteItem } from '@media-hub/shared';
@@ -51,7 +51,7 @@ export const notesRoutes: FastifyPluginAsync = async (fastify) => {
     });
   });
 
-  // 3. Create note
+  // 3. Create note (Member/Admin only)
   fastify.post<{
     Body: {
       title: string;
@@ -60,7 +60,7 @@ export const notesRoutes: FastifyPluginAsync = async (fastify) => {
       isPrivate?: boolean;
       tags?: string[];
     };
-  }>('/', async (request, reply) => {
+  }>('/', { preHandler: requireWriteAccess }, async (request, reply) => {
     const { title, content, categoryId, isPrivate, tags } = request.body || {};
 
     if (!title || !title.trim()) {
@@ -92,7 +92,7 @@ export const notesRoutes: FastifyPluginAsync = async (fastify) => {
     } satisfies ApiResponse<{ note: NoteItem }>);
   });
 
-  // 4. Update note
+  // 4. Update note (Member/Admin only)
   fastify.put<{
     Params: { id: string };
     Body: {
@@ -102,7 +102,7 @@ export const notesRoutes: FastifyPluginAsync = async (fastify) => {
       isFavorite?: boolean;
       isPinned?: boolean;
     };
-  }>('/:id', async (request, reply) => {
+  }>('/:id', { preHandler: requireWriteAccess }, async (request, reply) => {
     const isVaultUnlocked = checkVaultAuth(request);
     const updated = await notesService.updateNote(
       request.params.id,
@@ -124,8 +124,8 @@ export const notesRoutes: FastifyPluginAsync = async (fastify) => {
     });
   });
 
-  // 5. Delete note
-  fastify.delete<{ Params: { id: string } }>('/:id', async (request, reply) => {
+  // 5. Delete note (Member/Admin only)
+  fastify.delete<{ Params: { id: string } }>('/:id', { preHandler: requireWriteAccess }, async (request, reply) => {
     const isVaultUnlocked = checkVaultAuth(request);
     const success = await notesService.deleteNote(request.params.id, request.user!.id, isVaultUnlocked);
 

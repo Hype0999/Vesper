@@ -125,18 +125,18 @@ export function DashboardPage() {
     void reloadAll();
   }, [reloadAll, isUnlocked]);
 
-  // Normal public items
-  const normalVideos = mediaList.filter((m) => !m.isPrivate && m.type === 'video');
+  // Normal public items (Clean separation: Movies vs Photos & Family Videos)
+  const normalMovies = mediaList.filter((m) => !m.isPrivate && m.type === 'video' && m.subType !== 'family');
+  const normalMemories = mediaList.filter((m) => !m.isPrivate && (m.type === 'photo' || (m.type === 'video' && m.subType === 'family')));
   const normalSongs = mediaList.filter((m) => !m.isPrivate && m.type === 'audio');
-  const normalPhotos = mediaList.filter((m) => !m.isPrivate && m.type === 'photo');
   const normalNotes = notesList.filter((n) => !n.isPrivate);
 
   // Private vault items
-  const privateVideos = mediaList.filter((m) => m.isPrivate && m.type === 'video');
+  const privateMovies = mediaList.filter((m) => m.isPrivate && m.type === 'video' && m.subType !== 'family');
+  const privateMemories = mediaList.filter((m) => m.isPrivate && (m.type === 'photo' || (m.type === 'video' && m.subType === 'family')));
   const privateSongs = mediaList.filter((m) => m.isPrivate && m.type === 'audio');
-  const privatePhotos = mediaList.filter((m) => m.isPrivate && m.type === 'photo');
   const privateNotes = notesList.filter((n) => n.isPrivate);
-  const totalVaultItems = privateVideos.length + privateSongs.length + privatePhotos.length + privateNotes.length;
+  const totalVaultItems = privateMovies.length + privateMemories.length + privateSongs.length + privateNotes.length;
 
   // Handlers
   const handleDeleteMedia = async (id: string) => {
@@ -147,6 +147,41 @@ export function DashboardPage() {
       });
       if (res.ok) {
         setMediaList((prev) => prev.filter((m) => m.id !== id));
+      }
+    } catch { /* ignore */ }
+  };
+
+  const handleBatchDeleteMedia = async (ids: string[]) => {
+    try {
+      const res = await fetch('/api/media/batch-delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: JSON.stringify({ ids }),
+      });
+      if (res.ok) {
+        const idSet = new Set(ids);
+        setMediaList((prev) => prev.filter((m) => !idSet.has(m.id)));
+      }
+    } catch { /* ignore */ }
+  };
+
+  const handleReclassifyMedia = async (id: string, newSubType: 'movie' | 'family') => {
+    try {
+      const res = await fetch(`/api/media/${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: JSON.stringify({ subType: newSubType }),
+      });
+      if (res.ok) {
+        setMediaList((prev) =>
+          prev.map((m) => (m.id === id ? { ...m, subType: newSubType } : m))
+        );
       }
     } catch { /* ignore */ }
   };
@@ -252,15 +287,19 @@ export function DashboardPage() {
       />
       <VideoPlayerModal
         media={playingVideo}
-        allVideos={activeTab === 'vault' ? privateVideos : normalVideos}
+        allVideos={activeTab === 'vault' ? privateMovies : normalMovies}
         onClose={() => setPlayingVideo(null)}
         onDelete={handleDeleteMedia}
         onSelectRelatedVideo={(v) => setPlayingVideo(v)}
+        onReclassify={handleReclassifyMedia}
       />
       <PhotoLightboxModal
         media={viewingPhoto}
+        items={activeTab === 'vault' ? privateMemories : normalMemories}
         onClose={() => setViewingPhoto(null)}
         onDelete={handleDeleteMedia}
+        onSelectMedia={(p) => setViewingPhoto(p)}
+        onReclassify={handleReclassifyMedia}
       />
       <FactoryResetModal
         isOpen={isFactoryResetOpen}
@@ -356,15 +395,19 @@ export function DashboardPage() {
           )}
         </div>
 
-        {/* Action Controls */}
+        {/* Action Controls & Apple-style Control Capsule */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-          {/* Upload Button */}
+          {/* Primary Upload Button */}
           <button
             className="btn btn-brand"
             onClick={() => setIsUploadOpen(true)}
             style={{
               padding: '0.45rem 1rem',
               fontSize: '0.84rem',
+              borderRadius: 'var(--radius-full)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
             }}
           >
             <Upload size={15} />
@@ -378,159 +421,258 @@ export function DashboardPage() {
               setEditingNote(null);
               setIsNoteEditorOpen(true);
             }}
-            style={{ padding: '0.45rem 0.85rem', fontSize: '0.82rem' }}
+            style={{
+              padding: '0.45rem 0.85rem',
+              fontSize: '0.82rem',
+              borderRadius: 'var(--radius-full)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px',
+            }}
           >
             <Plus size={15} />
             <span>Note</span>
           </button>
 
-          {/* Vault Status Indicator / Toggle */}
-          {isUnlocked ? (
-            <button
-              className="btn btn-ghost"
-              onClick={() => void lockVault()}
-              disabled={isVaultLoading}
-              style={{
-                padding: '0.45rem 0.85rem',
-                fontSize: '0.82rem',
-                borderColor: 'var(--vault-border)',
-                background: 'var(--vault-subtle)',
-                color: 'var(--vault-primary)',
-              }}
-              title="Click to lock private vault"
-            >
-              <Unlock size={14} />
-              <span>Vault Unlocked</span>
-            </button>
-          ) : (
-            <button
-              className="btn btn-ghost"
-              onClick={openUnlockModal}
-              style={{
-                padding: '0.45rem 0.85rem',
-                fontSize: '0.82rem',
-                borderColor: 'var(--border-subtle)',
-                color: 'var(--text-secondary)',
-              }}
-              title="Unlock private vault"
-            >
-              <Lock size={14} />
-              <span>Unlock Vault</span>
-            </button>
-          )}
-
-          {/* Wi-Fi & Hotspot Modal Toggle */}
-          <button
-            className="btn btn-ghost"
-            onClick={() => setIsNetworkModalOpen(true)}
-            style={{
-              padding: '0.45rem 0.75rem',
-              fontSize: '0.82rem',
-              color: 'var(--text-secondary)',
-              border: '1px solid var(--border-subtle)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}
-            title="Wi-Fi, Pi Hotspot & Mobile Link QR"
-          >
-            <Wifi size={15} style={{ color: '#22c55e' }} />
-            <span>Wi-Fi & Phone</span>
-          </button>
-
-          {/* Multi-User Companion Management */}
-          <button
-            className="btn btn-ghost"
-            onClick={() => setIsUsersModalOpen(true)}
-            style={{
-              padding: '0.45rem 0.75rem',
-              fontSize: '0.82rem',
-              color: 'var(--text-secondary)',
-              border: '1px solid var(--border-subtle)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}
-            title="Companion Users & Permissions"
-          >
-            <Users size={15} />
-            <span>Companions</span>
-          </button>
-
-          {/* Hardware Guardian & Thermal Protection */}
-          <button
-            className="btn btn-ghost"
-            onClick={() => setIsHardwareGuardianOpen(true)}
-            style={{
-              padding: '0.45rem 0.75rem',
-              fontSize: '0.82rem',
-              color: 'var(--text-secondary)',
-              border: '1px solid var(--border-subtle)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}
-            title="Hardware Guardian & Thermal Protection"
-          >
-            <ShieldCheck size={15} style={{ color: '#10b981' }} />
-            <span>Guardian</span>
-          </button>
-
-          {/* Secret Admin Command Station (Only visible to admin) */}
-          {(user?.role === 'admin' || !user?.role) && (
-            <button
-              className="btn btn-ghost"
-              onClick={() => setIsAdminStationOpen(true)}
-              style={{
-                padding: '0.45rem 0.75rem',
-                fontSize: '0.82rem',
-                color: '#c084fc',
-                border: '1px solid rgba(192, 132, 252, 0.35)',
-                background: 'rgba(139, 92, 246, 0.1)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                boxShadow: '0 0 10px rgba(139, 92, 246, 0.15)',
-              }}
-              title="Secret Admin Station: Pendrive Linker, Media Ingestion & Hardware Telemetry"
-            >
-              <HardDrive size={15} style={{ color: '#c084fc' }} />
-              <span>Admin Station</span>
-            </button>
-          )}
-
-          {/* User badge */}
+          {/* Apple / Google Fluid Control Center Capsule */}
           <div
             style={{
-              background: 'var(--bg-surface-elevated)',
-              padding: '0.35rem 0.75rem',
+              display: 'flex',
+              alignItems: 'center',
+              background: 'rgba(255, 255, 255, 0.05)',
+              backdropFilter: 'blur(20px) saturate(180%)',
+              WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+              border: '1px solid rgba(255, 255, 255, 0.09)',
               borderRadius: 'var(--radius-full)',
-              fontSize: '0.8rem',
-              color: 'var(--text-secondary)',
-              border: '1px solid var(--border-subtle)',
+              padding: '3px 6px',
+              gap: '4px',
+              boxShadow: '0 2px 10px rgba(0, 0, 0, 0.4)',
             }}
           >
-            {user?.username}
+            {/* Vault Status Indicator / Toggle */}
+            {isUnlocked ? (
+              <button
+                onClick={() => void lockVault()}
+                disabled={isVaultLoading}
+                style={{
+                  padding: '4px 10px',
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  border: '1px solid var(--vault-border)',
+                  background: 'var(--vault-subtle)',
+                  color: 'var(--vault-primary)',
+                  borderRadius: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+                title="Vault Unlocked — Click to lock private partition"
+              >
+                <Unlock size={13} />
+                <span>Vault</span>
+              </button>
+            ) : (
+              <button
+                onClick={openUnlockModal}
+                style={{
+                  padding: '4px 10px',
+                  fontSize: '0.78rem',
+                  fontWeight: 500,
+                  border: '1px solid transparent',
+                  background: 'transparent',
+                  color: 'var(--text-secondary)',
+                  borderRadius: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                title="Unlock private vault"
+              >
+                <Lock size={13} />
+                <span>Vault</span>
+              </button>
+            )}
+
+            {/* Wi-Fi & Hotspot Modal Toggle */}
+            <button
+              onClick={() => setIsNetworkModalOpen(true)}
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-secondary)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                position: 'relative',
+                transition: 'background 0.15s ease',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)')}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+              title="Wi-Fi, Pi Hotspot & Mobile Link QR"
+            >
+              <Wifi size={15} style={{ color: '#22c55e' }} />
+              <span
+                style={{
+                  position: 'absolute',
+                  top: '6px',
+                  right: '6px',
+                  width: '5px',
+                  height: '5px',
+                  borderRadius: '50%',
+                  backgroundColor: '#22c55e',
+                }}
+              />
+            </button>
+
+            {/* Multi-User Companion Management */}
+            <button
+              onClick={() => setIsUsersModalOpen(true)}
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-secondary)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'background 0.15s ease',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)')}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+              title="Companion Users & Permissions"
+            >
+              <Users size={15} />
+            </button>
+
+            {/* Hardware Guardian & Thermal Protection */}
+            <button
+              onClick={() => setIsHardwareGuardianOpen(true)}
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                background: 'transparent',
+                border: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'background 0.15s ease',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)')}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+              title="Hardware Guardian & Thermal Protection"
+            >
+              <ShieldCheck size={15} style={{ color: '#10b981' }} />
+            </button>
+
+            {/* Secret Admin Command Station (Only visible to admin) */}
+            {(user?.role === 'admin' || !user?.role) && (
+              <button
+                onClick={() => setIsAdminStationOpen(true)}
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  background: 'rgba(168, 85, 247, 0.15)',
+                  border: '1px solid rgba(168, 85, 247, 0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  transition: 'background 0.15s ease',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(168, 85, 247, 0.25)')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgba(168, 85, 247, 0.15)')}
+                title="Admin Command Station: Pendrive Linker, Media Ingestion & System Telemetry"
+              >
+                <HardDrive size={14} style={{ color: '#c084fc' }} />
+              </button>
+            )}
+
+            {/* Subtle Divider */}
+            <div style={{ width: '1px', height: '18px', backgroundColor: 'rgba(255, 255, 255, 0.12)', margin: '0 2px' }} />
+
+            {/* User Initial Avatar */}
+            <div
+              title={`Signed in as ${user?.username || 'User'}`}
+              style={{
+                width: '26px',
+                height: '26px',
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #475569 0%, #1e293b 100%)',
+                color: '#f8fafc',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '0.74rem',
+                fontWeight: 700,
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                userSelect: 'none',
+              }}
+            >
+              {user?.username?.charAt(0).toUpperCase() || 'U'}
+            </div>
+
+            {/* Factory Hard Reset Button */}
+            <button
+              onClick={() => setIsFactoryResetOpen(true)}
+              style={{
+                width: '30px',
+                height: '30px',
+                borderRadius: '50%',
+                background: 'transparent',
+                border: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: 'rgba(239, 68, 68, 0.65)',
+                transition: 'background 0.15s ease',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.12)')}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+              title="Factory Hard Reset (Wipe all media & data)"
+            >
+              <Trash2 size={14} />
+            </button>
+
+            {/* Logout Button */}
+            <button
+              onClick={() => void logout()}
+              style={{
+                width: '30px',
+                height: '30px',
+                borderRadius: '50%',
+                background: 'transparent',
+                border: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: 'var(--text-muted)',
+                transition: 'background 0.15s ease',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)')}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+              title="Sign out"
+            >
+              <LogOut size={14} />
+            </button>
           </div>
-
-          {/* Factory Hard Reset Button */}
-          <button
-            className="btn btn-ghost"
-            onClick={() => setIsFactoryResetOpen(true)}
-            style={{ padding: '0.45rem', color: 'rgba(239, 68, 68, 0.7)' }}
-            title="Factory Hard Reset (Wipe all media & data)"
-          >
-            <Trash2 size={16} />
-          </button>
-
-          <button
-            className="btn btn-ghost"
-            onClick={() => void logout()}
-            style={{ padding: '0.45rem', color: 'var(--text-muted)' }}
-            title="Sign out"
-          >
-            <LogOut size={16} />
-          </button>
         </div>
       </header>
 
@@ -558,7 +700,7 @@ export function DashboardPage() {
             style={{ fontSize: '0.85rem', padding: '0.45rem 0.95rem' }}
           >
             <Film size={15} />
-            <span>Videos</span>
+            <span>Movies</span>
             <span
               style={{
                 background: activeTab === 'videos' ? '#000000' : 'var(--bg-surface-elevated)',
@@ -569,7 +711,28 @@ export function DashboardPage() {
                 marginLeft: '4px',
               }}
             >
-              {normalVideos.length}
+              {normalMovies.length}
+            </span>
+          </button>
+
+          <button
+            className={`btn ${activeTab === 'photos' ? 'btn-primary' : 'btn-ghost'}`}
+            onClick={() => setActiveTab('photos')}
+            style={{ fontSize: '0.85rem', padding: '0.45rem 0.95rem' }}
+          >
+            <ImageIcon size={15} />
+            <span>Photos & Memories</span>
+            <span
+              style={{
+                background: activeTab === 'photos' ? '#000000' : 'var(--bg-surface-elevated)',
+                color: activeTab === 'photos' ? '#ffffff' : 'var(--text-muted)',
+                borderRadius: 'var(--radius-full)',
+                padding: '1px 6px',
+                fontSize: '0.7rem',
+                marginLeft: '4px',
+              }}
+            >
+              {normalMemories.length}
             </span>
           </button>
 
@@ -591,27 +754,6 @@ export function DashboardPage() {
               }}
             >
               {normalSongs.length}
-            </span>
-          </button>
-
-          <button
-            className={`btn ${activeTab === 'photos' ? 'btn-primary' : 'btn-ghost'}`}
-            onClick={() => setActiveTab('photos')}
-            style={{ fontSize: '0.85rem', padding: '0.45rem 0.95rem' }}
-          >
-            <ImageIcon size={15} />
-            <span>Photos</span>
-            <span
-              style={{
-                background: activeTab === 'photos' ? '#000000' : 'var(--bg-surface-elevated)',
-                color: activeTab === 'photos' ? '#ffffff' : 'var(--text-muted)',
-                borderRadius: 'var(--radius-full)',
-                padding: '1px 6px',
-                fontSize: '0.7rem',
-                marginLeft: '4px',
-              }}
-            >
-              {normalPhotos.length}
             </span>
           </button>
 
@@ -748,7 +890,7 @@ export function DashboardPage() {
           <>
             {activeTab === 'videos' && (
               <VideosView
-                videos={normalVideos}
+                videos={normalMovies}
                 onSelectVideo={(v) => setPlayingVideo(v)}
                 onOpenUpload={() => setIsUploadOpen(true)}
               />
@@ -772,9 +914,12 @@ export function DashboardPage() {
             )}
             {activeTab === 'photos' && (
               <PhotosView
-                photos={normalPhotos}
+                photos={normalMemories}
                 onSelectPhoto={(p) => setViewingPhoto(p)}
                 onOpenUpload={() => setIsUploadOpen(true)}
+                onDeleteMedia={handleDeleteMedia}
+                onBatchDelete={handleBatchDeleteMedia}
+                onReclassify={handleReclassifyMedia}
               />
             )}
             {activeTab === 'notes' && (
@@ -824,9 +969,9 @@ export function DashboardPage() {
       <MobileBottomNav
         activeTab={activeTab}
         onTabChange={(t) => setActiveTab(t)}
-        videoCount={normalVideos.length}
+        videoCount={normalMovies.length}
         songCount={normalSongs.length}
-        photoCount={normalPhotos.length}
+        photoCount={normalMemories.length}
         noteCount={normalNotes.length}
         vaultCount={totalVaultItems}
         isVaultUnlocked={isUnlocked}

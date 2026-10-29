@@ -18,6 +18,7 @@ const IngestMediaSchema = z.object({
   filePaths: z.array(z.string().trim()).min(1, 'At least one file must be selected for ingestion'),
   isPrivate: z.boolean().default(false),
   categoryId: z.string().optional(),
+  subType: z.enum(['movie', 'family', 'photo', 'music', 'auto']).optional(),
   tags: z.array(z.string()).optional(),
 });
 
@@ -114,6 +115,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         isPrivate: parse.data.isPrivate,
         userId: request.user!.id,
         categoryId: parse.data.categoryId,
+        subType: parse.data.subType,
         tags: parse.data.tags,
       });
 

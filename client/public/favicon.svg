@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <defs>
+    <linearGradient id="vesperLeftFacet" x1="6" y1="8" x2="24" y2="42" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="40%" stop-color="#e2e8f0" />
+      <stop offset="100%" stop-color="#94a3b8" />
+    </linearGradient>
+    <linearGradient id="vesperRightFacet" x1="42" y1="8" x2="24" y2="42" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#cbd5e1" />
+      <stop offset="60%" stop-color="#64748b" />
+      <stop offset="100%" stop-color="#334155" />
+    </linearGradient>
+    <linearGradient id="vesperStar" x1="20" y1="6" x2="28" y2="14" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#fbbf24" />
+      <stop offset="100%" stop-color="#d97706" />
+    </linearGradient>
+    <radialGradient id="vesperGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.15" />
+      <stop offset="100%" stop-color="#000000" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+
+  <!-- Obsidian rounded app tile -->
+  <rect width="48" height="48" rx="11" fill="#080a0f" />
+  <rect width="46" height="46" x="1" y="1" rx="10" fill="none" stroke="rgba(255, 255, 255, 0.12)" stroke-width="1" />
+  <circle cx="24" cy="24" r="20" fill="url(#vesperGlow)" />
+
+  <!-- Platinum Monolith Left Pillar -->
+  <path d="M 10 10 L 19 10 L 24 33 L 17 38 Z" fill="url(#vesperLeftFacet)" />
+
+  <!-- Titanium Monolith Right Pillar -->
+  <path d="M 38 10 L 29 10 L 24 33 L 31 38 Z" fill="url(#vesperRightFacet)" />
+
+  <!-- Interlocking Beveled Apex -->
+  <path d="M 17 38 L 24 33 L 31 38 L 24 43 Z" fill="#f8fafc" opacity="0.95" />
+
+  <!-- The Evening Star (Vesper Diamond Crown) -->
+  <path d="M 24 5 L 26.5 9.8 L 31.5 12.5 L 26.5 15.2 L 24 20 L 21.5 15.2 L 16.5 12.5 L 21.5 9.8 Z" fill="url(#vesperStar)" />
+</svg>
+

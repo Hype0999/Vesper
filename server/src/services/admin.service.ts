@@ -282,11 +282,40 @@ export class AdminService {
           if (type) {
             try {
               const fileStats = fs.statSync(fullPath);
+              let subType: 'movie' | 'family' | 'photo' | 'music' = type === 'photo' ? 'photo' : type === 'audio' ? 'music' : 'movie';
+              if (type === 'video') {
+                const lowerPath = fullPath.toLowerCase();
+                if (
+                  lowerPath.includes('dcim') ||
+                  lowerPath.includes('camera') ||
+                  lowerPath.includes('family') ||
+                  lowerPath.includes('phone') ||
+                  lowerPath.includes('whatsapp') ||
+                  lowerPath.includes('photos') ||
+                  lowerPath.includes('trips') ||
+                  entry.name.toLowerCase().startsWith('vid_') ||
+                  entry.name.toLowerCase().startsWith('mov_') ||
+                  entry.name.toLowerCase().startsWith('pxl_') ||
+                  entry.name.toLowerCase().startsWith('img_')
+                ) {
+                  subType = 'family';
+                } else if (
+                  lowerPath.includes('movies') ||
+                  lowerPath.includes('cinema') ||
+                  lowerPath.includes('films') ||
+                  lowerPath.includes('shows') ||
+                  lowerPath.includes('series')
+                ) {
+                  subType = 'movie';
+                }
+              }
+
               discovered.push({
                 filePath: fullPath,
                 fileName: entry.name,
                 fileSize: fileStats.size,
                 type,
+                subType,
                 extension: ext,
                 mimeType: mime,
                 parentDir: path.basename(currentDir),
@@ -325,6 +354,7 @@ export class AdminService {
     isPrivate: boolean;
     userId: string;
     categoryId?: string;
+    subType?: 'movie' | 'family' | 'photo' | 'music' | 'auto';
     tags?: string[];
   }): Promise<MediaIngestResult> {
     const results: MediaIngestResult['items'] = [];
@@ -353,9 +383,11 @@ export class AdminService {
         else if (AUDIO_EXTENSIONS.has(ext)) mimeType = ext === '.mp3' ? 'audio/mpeg' : ext === '.flac' ? 'audio/flac' : 'audio/mp4';
         else if (PHOTO_EXTENSIONS.has(ext)) mimeType = ext === '.png' ? 'image/png' : 'image/jpeg';
 
+        let itemSubType = options.subType === 'auto' ? undefined : options.subType;
+
         const fileStream = fs.createReadStream(filePath);
 
-        const savedMedia = await this.mediaService.saveMediaFile({
+        const ingestPromise = this.mediaService.saveMediaFile({
           userId: options.userId,
           fileStream,
           originalFilename: fileName,
@@ -363,8 +395,16 @@ export class AdminService {
           title: baseTitle,
           isPrivate: options.isPrivate,
           categoryId: options.categoryId,
+          subType: itemSubType,
           tags: options.tags,
         });
+
+        // Strict 25-second per-file guard to prevent multi-file batch stalls
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Ingestion timed out after 25 seconds')), 25000)
+        );
+
+        const savedMedia = await Promise.race([ingestPromise, timeoutPromise]);
 
         results.push({
           filePath,

@@ -60,10 +60,11 @@ describe('Phase 2: SQLite Database Engine & Migration Tests', () => {
 
     const result = runner.run(db);
 
-    expect(result.appliedCount).toBe(2);
-    expect(result.currentVersion).toBe(2);
+    expect(result.appliedCount).toBe(3);
+    expect(result.currentVersion).toBe(3);
     expect(result.appliedMigrations).toContain('001_initial_schema');
     expect(result.appliedMigrations).toContain('002_add_audio_and_user_roles');
+    expect(result.appliedMigrations).toContain('003_add_media_subtype_and_path_filter');
 
     // Verify tables exist
     const tables = db
@@ -99,7 +100,7 @@ describe('Phase 2: SQLite Database Engine & Migration Tests', () => {
     // Second run
     const secondRun = runner.run(db);
     expect(secondRun.appliedCount).toBe(0);
-    expect(secondRun.currentVersion).toBe(2);
+    expect(secondRun.currentVersion).toBe(3);
     expect(secondRun.appliedMigrations.length).toBe(0);
 
     conn.close();

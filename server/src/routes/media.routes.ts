@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import fs from 'node:fs';
-import { authenticateUser } from '../middleware/auth.js';
+import { authenticateUser, requireWriteAccess } from '../middleware/auth.js';
 import { checkVaultAuth } from '../middleware/vault-auth.js';
 import { getMediaService } from '../services/media.service.js';
 import { VaultCipher } from '../utils/vault-cipher.js';
@@ -12,8 +12,8 @@ export const mediaRoutes: FastifyPluginAsync = async (fastify) => {
 
   const mediaService = getMediaService();
 
-  // 1. Upload Media (Streaming Multipart)
-  fastify.post('/upload', async (request, reply) => {
+  // 1. Upload Media (Streaming Multipart - Member/Admin only)
+  fastify.post('/upload', { preHandler: requireWriteAccess }, async (request, reply) => {
     const data = await request.file();
     if (!data) {
       return reply.status(400).send({
@@ -28,6 +28,7 @@ export const mediaRoutes: FastifyPluginAsync = async (fastify) => {
     const description = fields['description']?.value?.trim() || query.description?.trim() || '';
     const categoryId = fields['categoryId']?.value?.trim() || query.categoryId?.trim() || undefined;
     const isPrivate = fields['isPrivate']?.value === 'true' || fields['isPrivate']?.value === '1' || query.isPrivate === 'true' || query.isPrivate === '1';
+    const subType = (fields['subType']?.value?.trim() || query.subType?.trim()) as 'movie' | 'family' | 'photo' | 'music' | undefined;
     const tagsStr = fields['tags']?.value?.trim() || query.tags?.trim();
     const tags = tagsStr ? tagsStr.split(',').map((t) => t.trim()).filter(Boolean) : [];
 
@@ -54,6 +55,7 @@ export const mediaRoutes: FastifyPluginAsync = async (fastify) => {
         description,
         categoryId,
         isPrivate,
+        subType,
         tags,
       });
 
@@ -74,17 +76,19 @@ export const mediaRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get<{
     Querystring: {
       type?: MediaType;
+      subType?: 'movie' | 'family' | 'photo' | 'music';
       categoryId?: string;
       vaultOnly?: string;
       search?: string;
     };
   }>('/', async (request, reply) => {
     const isVaultUnlocked = checkVaultAuth(request);
-    const { type, categoryId, vaultOnly, search } = request.query;
+    const { type, subType, categoryId, vaultOnly, search } = request.query;
 
     const mediaList = await mediaService.getMediaList({
       userId: request.user!.id,
       type,
+      subType,
       categoryId,
       isVaultUnlocked,
       vaultOnly: vaultOnly === 'true' || vaultOnly === '1',
@@ -225,8 +229,8 @@ export const mediaRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  // 6. Delete Media
-  fastify.delete<{ Params: { id: string } }>('/:id', async (request, reply) => {
+  // 6. Delete Media (Member/Admin only)
+  fastify.delete<{ Params: { id: string } }>('/:id', { preHandler: requireWriteAccess }, async (request, reply) => {
     const isVaultUnlocked = checkVaultAuth(request);
     const success = await mediaService.deleteMedia(request.params.id, request.user!.id, isVaultUnlocked);
 
@@ -238,6 +242,37 @@ export const mediaRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     return reply.send({ success: true });
+  });
+
+  // 6b. Batch Delete Media (Multi-select from Google Photos or Library - Member/Admin only)
+  fastify.post<{
+    Body: { ids: string[] };
+  }>('/batch-delete', { preHandler: requireWriteAccess }, async (request, reply) => {
+    const isVaultUnlocked = checkVaultAuth(request);
+    const ids = Array.isArray(request.body?.ids) ? request.body.ids : [];
+    const count = await mediaService.batchDeleteMedia(ids, request.user!.id, isVaultUnlocked);
+    return reply.send({ success: true, data: { deletedCount: count } });
+  });
+
+  // 6c. Update Media / Reclassify (Member/Admin only)
+  fastify.patch<{
+    Params: { id: string };
+    Body: {
+      title?: string;
+      description?: string;
+      categoryId?: string | null;
+      isFavorite?: boolean;
+      subType?: 'movie' | 'family' | 'photo' | 'music';
+    };
+  }>('/:id', { preHandler: requireWriteAccess }, async (request, reply) => {
+    const updated = await mediaService.updateMedia(request.params.id, request.user!.id, request.body || {});
+    if (!updated) {
+      return reply.status(404).send({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Media item not found or could not be updated' },
+      });
+    }
+    return reply.send({ success: true, data: { media: updated } });
   });
 
   // 7. Save Playback Progress
