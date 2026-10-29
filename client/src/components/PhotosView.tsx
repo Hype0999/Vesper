@@ -149,7 +149,7 @@ export const PhotosView: React.FC<PhotosViewProps> = ({
   };
 
   const formatDuration = (seconds?: number | null) => {
-    if (!seconds || seconds <= 0) return '0:10';
+    if (!seconds || isNaN(seconds) || !isFinite(seconds) || seconds <= 0) return '0:10';
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
     return `${m}:${s.toString().padStart(2, '0')}`;
@@ -391,9 +391,10 @@ export const PhotosView: React.FC<PhotosViewProps> = ({
               }}
               title="Configure folder paths and automatic separation rules"
             >
-            <Sliders size={13} />
-            <span>Path & Auto-Filtration</span>
-          </button>
+              <Sliders size={13} />
+              <span>Path & Auto-Filtration</span>
+            </button>
+          )}
 
           {/* Select Toggle */}
           <button

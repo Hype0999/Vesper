@@ -142,7 +142,7 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
   if (!currentTrack) return null;
 
   const formatTime = (seconds: number) => {
-    if (isNaN(seconds) || seconds < 0) return '0:00';
+    if (!seconds || isNaN(seconds) || !isFinite(seconds) || seconds < 0) return '0:00';
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
     return `${m}:${s.toString().padStart(2, '0')}`;
@@ -153,10 +153,30 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
       <audio
         ref={audioRef}
         onTimeUpdate={() => {
-          if (audioRef.current) setCurrentTime(audioRef.current.currentTime);
+          if (audioRef.current) {
+            const ct = audioRef.current.currentTime;
+            if (isFinite(ct)) setCurrentTime(ct);
+          }
         }}
         onLoadedMetadata={() => {
-          if (audioRef.current) setDuration(audioRef.current.duration);
+          if (audioRef.current) {
+            const d = audioRef.current.duration;
+            if (isFinite(d) && d > 0) {
+              setDuration(d);
+            } else if (currentTrack.duration && isFinite(currentTrack.duration) && currentTrack.duration > 0) {
+              setDuration(currentTrack.duration);
+            }
+          }
+        }}
+        onDurationChange={() => {
+          if (audioRef.current) {
+            const d = audioRef.current.duration;
+            if (isFinite(d) && d > 0) {
+              setDuration(d);
+            } else if (currentTrack.duration && isFinite(currentTrack.duration) && currentTrack.duration > 0) {
+              setDuration(currentTrack.duration);
+            }
+          }
         }}
         onEnded={() => {
           if (isLoop) {

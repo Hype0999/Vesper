@@ -190,7 +190,7 @@ export function HealthCard() {
               <span style={{ fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Hub Uptime</span>
             </div>
             <p style={{ fontSize: '1.05rem', fontWeight: 700, color: '#ffffff', margin: 0 }}>
-              {Math.floor(health.uptimeSeconds / 60)}m {health.uptimeSeconds % 60}s
+              {Math.floor((health.uptimeSeconds || 0) / 60)}m {Math.floor((health.uptimeSeconds || 0) % 60)}s
             </p>
             <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '2px', margin: 0 }}>
               Node {health.nodeVersion}

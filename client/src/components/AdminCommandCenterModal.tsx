@@ -187,8 +187,8 @@ export const AdminCommandCenterModal: React.FC<AdminCommandCenterModalProps> = (
     const fileList = Array.from(selectedFilePaths);
     setIngestProgress({ current: 0, total: fileList.length, currentFile: 'Initializing ingestion pipeline...' });
 
-    // Ingest in compact chunks of 4 files for responsive live progress and low memory footprint
-    const CHUNK_SIZE = 4;
+    // Ingest files one-by-one for precise live feedback, individual progress tracking, and zero freeze
+    const CHUNK_SIZE = 1;
     let totalImported = 0;
     let totalFailed = 0;
 
@@ -199,21 +199,21 @@ export const AdminCommandCenterModal: React.FC<AdminCommandCenterModalProps> = (
 
       const chunk = fileList.slice(i, i + CHUNK_SIZE);
       const currentName = chunk[0]?.split(/[\\/]/).pop() || '';
-      const percent = Math.round((i / fileList.length) * 100);
+      const percent = Math.round(((i + 1) / fileList.length) * 100);
 
       setIngestProgress({
-        current: i,
+        current: i + 1,
         total: fileList.length,
-        currentFile: `${percent}% • ${
+        currentFile: `${i + 1}/${fileList.length} (${percent}%) • ${
           targetDestination === 'vault'
             ? `Encrypting into Vault (AES-256): ${currentName}`
             : `Ingesting into Sanctuary: ${currentName}`
         }`,
       });
 
-      // AbortController with 45-second timeout per batch to avoid infinite freeze
+      // 5-minute timeout per file to accommodate multi-GB movies and slower USB 2.0 drives
       const controller = new AbortController();
-      const timeoutId = window.setTimeout(() => controller.abort(), 45000);
+      const timeoutId = window.setTimeout(() => controller.abort(), 300000);
 
       try {
         const res = await fetch('/api/admin/drives/ingest', {

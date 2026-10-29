@@ -78,21 +78,45 @@ Vesper solves the common media server frustration of mixing personal phone memor
 - **Physical Theft Protection**: If an unauthorized party removes the USB flash drive or SD card, the raw files cannot be read without the server's session secret and vault authorization.
 - On-the-fly random-access stream decryption with zero CPU transcode overhead.
 
-### 💾 6. Secret Admin Station & USB Pendrive Ingestion Engine
+### 🛡️ 6. Multi-Tier Role-Based Security Matrix (Guest, Member, Admin)
+Vesper implements strict, defense-in-depth role isolation at both the backend HTTP middleware level and the frontend UI layer:
+
+| Capability / Action | 👤 Guest (`guest`) | 👥 Member (`member`) | 👑 Administrator (`admin`) |
+| :--- | :---: | :---: | :---: |
+| **Stream Public Cinema & Shows** | ✅ Allowed | ✅ Allowed | ✅ Allowed |
+| **Listen to Music Sanctuary** | ✅ Allowed | ✅ Allowed | ✅ Allowed |
+| **Browse Photos & Memories** | ✅ Allowed | ✅ Allowed | ✅ Allowed |
+| **Download Original Files** | ✅ Allowed | ✅ Allowed | ✅ Allowed |
+| **Upload Media & Create Notes** | ❌ **Hidden & Blocked** | ✅ Allowed | ✅ Allowed |
+| **Delete / Reclassify Content** | ❌ **Hidden & Blocked** | ✅ Allowed | ✅ Allowed |
+| **Private Vault Partition** | ❌ **Completely Invisible** | ✅ Personal Vault | ✅ Full Vault Access |
+| **Hardware Guardian Thermals** | ❌ **Hidden** | ✅ View Only | ✅ Full Telemetry |
+| **Wi-Fi & Travel Hotspot Setup** | ❌ **Hidden & Blocked** | ❌ **Hidden & Blocked** | ✅ Allowed |
+| **Companion User Management** | ❌ **Hidden & Blocked** | ❌ **Hidden & Blocked** | ✅ Allowed |
+| **Admin Command Station** | ❌ **Hidden & Blocked** | ❌ **Hidden & Blocked** | ✅ Allowed |
+| **Factory Hard Reset Hub** | ❌ **Hidden & Blocked** | ❌ **Hidden & Blocked** | ✅ Allowed |
+
+- **Strict Guest Enclosure**: Guests cannot upload, modify, delete, or reset anything. The Private Vault tab, unlock capsule button, partition filter chips, and vault banner are completely hidden. Any URL tampering or direct API invocation immediately yields HTTP `403 Forbidden` (`FORBIDDEN_GUEST_WRITE_RESTRICTED` / `FORBIDDEN_VAULT_RESTRICTED`).
+- **Member Independence**: Members enjoy personal playback, uploads, notes, and a private cryptographic vault without exposing administrative controls or network settings.
+- **Admin Sovereign Authority**: Full management over USB pendrive linker, hotspot failover, companion credentials, and system wipe.
+
+### 💾 7. Secret Admin Station & USB Pendrive Ingestion Engine
 - **Cross-Platform Drive Auto-Detection**: Instant discovery of USB drives, thumbdrives, and external storage (Linux `/media`, `/mnt`, `lsblk`, and Windows drive letters).
 - **Non-Blocking Multi-Upload Engine**:
-  - Files are processed in compact batches of 4 for fluid, live percentage tracking (`0%` to `100%`).
-  - **Anti-Hang Protection**: Every file ingestion is guarded by an internal 25-second watchdog timer, and FFmpeg frame extractions have strict 7-second timeouts with instant SVG poster fallbacks.
-  - **Cancellation Support**: A *Cancel Ingestion* button allows stopping remaining queued files without hanging the system.
+  - Files are processed sequentially with individual progress tracking (`1/N`, `2/N`, `N/N`) and live file name reporting.
+  - **Dynamic Transfer Budget**: Instead of rigid fixed timers that stall large files, ingestion uses a dynamic transfer budget (minimum 180 seconds, scaling with file size at ~5MB/s worst-case + thumbnail generation) so multi-gigabyte 4K movies transfer reliably.
+  - **Stream Handle Safety**: File descriptors are cleanly monitored and guaranteed to be destroyed on completion, error, or cancellation.
+  - **Cancellation Support**: A *Cancel Ingestion* button allows gracefully stopping queued files without corrupting ongoing disk writes or hanging the server.
 - **Hardware Telemetry**: Real-time Raspberry Pi CPU core thermals (<45°C), RAM headroom, active companion count, and temporary cache purger.
 
-### 🍎 7. Apple + Google Fluid Consumer Design
+### 🍎 8. Apple + Google Fluid Consumer Design
 - **Serene Control Center Capsule**: Instead of cluttered buttons, utility controls (Wi-Fi status with live green ping dot, Companion manager, Guardian thermals, Vault lock/unlock, and Admin Station) are unified into an Apple-style frosted glass capsule.
+- **Google Photos Timeline Clustering**: Photos and family phone clips organized chronologically with EXIF details drawer, multi-selection bar, and clean lightbox player.
 - **Liquid Display Transitions**: Built with custom spring physics (`cubic-bezier(0.16, 1, 0.3, 1)` and `cubic-bezier(0.32, 0.72, 0, 1)`).
-- **Specular Shimmer Skeletons**: 45-degree sweeping specular reflection gradient skeletons for smooth perceived loading.
-- **Mobile Touch Ergonomics**: Minimum 44px tap targets, sticky glass bottom navigation, and safe-area inset compliance for notched iPhones and Androids.
+- **Infinite Timestamp Guard**: Scrubber and timeline calculations strictly enforce finite number validation, completely eliminating `Infinity:NaN:NaN` anomalies during direct chunked passthrough streaming.
+- **Mobile Touch Ergonomics**: Minimum 44px tap targets, sticky glass bottom navigation, mobile back-gesture history traps, and safe-area inset compliance for notched iPhones and Androids.
 
-### 🚆 8. Automated Travel Hotspot Failover (Solves the Train Wi-Fi Problem)
+### 🚆 9. Automated Travel Hotspot Failover (Solves the Train Wi-Fi Problem)
 When traveling, your Raspberry Pi cannot reach your home Wi-Fi network. Standard setups stay idle in client mode with no IP and no signal broadcast.
 - Vesper's background watchdog (`vesper-autohotspot.service`) waits 12 seconds on boot.
 - If home Wi-Fi is unreachable, it **automatically switches into Access Point (AP) mode**!

@@ -50,6 +50,13 @@ export function DashboardPage() {
   const { user, appName, logout } = useAuth();
   const { isUnlocked, openUnlockModal, lockVault, isLoading: isVaultLoading } = useVault();
 
+  // Role permissions
+  const userRole = user?.role || 'admin';
+  const isAdmin = userRole === 'admin';
+  const isGuest = userRole === 'guest';
+  const canWrite = !isGuest;
+  const canAccessVault = !isGuest;
+
   const [activeTab, setActiveTab] = useState<ActiveTab>('videos');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
@@ -124,6 +131,13 @@ export function DashboardPage() {
   useEffect(() => {
     void reloadAll();
   }, [reloadAll, isUnlocked]);
+
+  // Restrict guest from entering vault view
+  useEffect(() => {
+    if (isGuest && activeTab === 'vault') {
+      setActiveTab('videos');
+    }
+  }, [isGuest, activeTab]);
 
   // Normal public items (Clean separation: Movies vs Photos & Family Videos)
   const normalMovies = mediaList.filter((m) => !m.isPrivate && m.type === 'video' && m.subType !== 'family');
@@ -289,17 +303,17 @@ export function DashboardPage() {
         media={playingVideo}
         allVideos={activeTab === 'vault' ? privateMovies : normalMovies}
         onClose={() => setPlayingVideo(null)}
-        onDelete={handleDeleteMedia}
+        onDelete={canWrite ? handleDeleteMedia : undefined}
         onSelectRelatedVideo={(v) => setPlayingVideo(v)}
-        onReclassify={handleReclassifyMedia}
+        onReclassify={canWrite ? handleReclassifyMedia : undefined}
       />
       <PhotoLightboxModal
         media={viewingPhoto}
         items={activeTab === 'vault' ? privateMemories : normalMemories}
         onClose={() => setViewingPhoto(null)}
-        onDelete={handleDeleteMedia}
+        onDelete={canWrite ? handleDeleteMedia : undefined}
         onSelectMedia={(p) => setViewingPhoto(p)}
-        onReclassify={handleReclassifyMedia}
+        onReclassify={canWrite ? handleReclassifyMedia : undefined}
       />
       <FactoryResetModal
         isOpen={isFactoryResetOpen}
@@ -397,42 +411,46 @@ export function DashboardPage() {
 
         {/* Action Controls & Apple-style Control Capsule */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-          {/* Primary Upload Button */}
-          <button
-            className="btn btn-brand"
-            onClick={() => setIsUploadOpen(true)}
-            style={{
-              padding: '0.45rem 1rem',
-              fontSize: '0.84rem',
-              borderRadius: 'var(--radius-full)',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}
-          >
-            <Upload size={15} />
-            <span>Upload</span>
-          </button>
+          {/* Primary Upload Button (Restricted: Member/Admin Only) */}
+          {canWrite && (
+            <button
+              className="btn btn-brand"
+              onClick={() => setIsUploadOpen(true)}
+              style={{
+                padding: '0.45rem 1rem',
+                fontSize: '0.84rem',
+                borderRadius: 'var(--radius-full)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
+              <Upload size={15} />
+              <span>Upload</span>
+            </button>
+          )}
 
-          {/* New Note Button */}
-          <button
-            className="btn btn-secondary"
-            onClick={() => {
-              setEditingNote(null);
-              setIsNoteEditorOpen(true);
-            }}
-            style={{
-              padding: '0.45rem 0.85rem',
-              fontSize: '0.82rem',
-              borderRadius: 'var(--radius-full)',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '5px',
-            }}
-          >
-            <Plus size={15} />
-            <span>Note</span>
-          </button>
+          {/* New Note Button (Restricted: Member/Admin Only) */}
+          {canWrite && (
+            <button
+              className="btn btn-secondary"
+              onClick={() => {
+                setEditingNote(null);
+                setIsNoteEditorOpen(true);
+              }}
+              style={{
+                padding: '0.45rem 0.85rem',
+                fontSize: '0.82rem',
+                borderRadius: 'var(--radius-full)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+              }}
+            >
+              <Plus size={15} />
+              <span>Note</span>
+            </button>
+          )}
 
           {/* Apple / Google Fluid Control Center Capsule */}
           <div
@@ -449,138 +467,146 @@ export function DashboardPage() {
               boxShadow: '0 2px 10px rgba(0, 0, 0, 0.4)',
             }}
           >
-            {/* Vault Status Indicator / Toggle */}
-            {isUnlocked ? (
+            {/* Vault Status Indicator / Toggle (Restricted: Member/Admin Only) */}
+            {canAccessVault && (
+              isUnlocked ? (
+                <button
+                  onClick={() => void lockVault()}
+                  disabled={isVaultLoading}
+                  style={{
+                    padding: '4px 10px',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    border: '1px solid var(--vault-border)',
+                    background: 'var(--vault-subtle)',
+                    color: 'var(--vault-primary)',
+                    borderRadius: '16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                  title="Vault Unlocked — Click to lock private partition"
+                >
+                  <Unlock size={13} />
+                  <span>Vault</span>
+                </button>
+              ) : (
+                <button
+                  onClick={openUnlockModal}
+                  style={{
+                    padding: '4px 10px',
+                    fontSize: '0.78rem',
+                    fontWeight: 500,
+                    border: '1px solid transparent',
+                    background: 'transparent',
+                    color: 'var(--text-secondary)',
+                    borderRadius: '16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                  title="Unlock private vault"
+                >
+                  <Lock size={13} />
+                  <span>Vault</span>
+                </button>
+              )
+            )}
+
+            {/* Wi-Fi & Hotspot Modal Toggle (Restricted: Admin Only) */}
+            {isAdmin && (
               <button
-                onClick={() => void lockVault()}
-                disabled={isVaultLoading}
+                onClick={() => setIsNetworkModalOpen(true)}
                 style={{
-                  padding: '4px 10px',
-                  fontSize: '0.78rem',
-                  fontWeight: 600,
-                  border: '1px solid var(--vault-border)',
-                  background: 'var(--vault-subtle)',
-                  color: 'var(--vault-primary)',
-                  borderRadius: '16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '5px',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                }}
-                title="Vault Unlocked — Click to lock private partition"
-              >
-                <Unlock size={13} />
-                <span>Vault</span>
-              </button>
-            ) : (
-              <button
-                onClick={openUnlockModal}
-                style={{
-                  padding: '4px 10px',
-                  fontSize: '0.78rem',
-                  fontWeight: 500,
-                  border: '1px solid transparent',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
                   background: 'transparent',
+                  border: 'none',
                   color: 'var(--text-secondary)',
-                  borderRadius: '16px',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '5px',
+                  justifyContent: 'center',
                   cursor: 'pointer',
-                  transition: 'all 0.15s ease',
+                  position: 'relative',
+                  transition: 'background 0.15s ease',
                 }}
                 onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)')}
                 onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-                title="Unlock private vault"
+                title="Wi-Fi, Pi Hotspot & Mobile Link QR"
               >
-                <Lock size={13} />
-                <span>Vault</span>
+                <Wifi size={15} style={{ color: '#22c55e' }} />
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: '6px',
+                    right: '6px',
+                    width: '5px',
+                    height: '5px',
+                    borderRadius: '50%',
+                    backgroundColor: '#22c55e',
+                  }}
+                />
               </button>
             )}
 
-            {/* Wi-Fi & Hotspot Modal Toggle */}
-            <button
-              onClick={() => setIsNetworkModalOpen(true)}
-              style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '50%',
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--text-secondary)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                position: 'relative',
-                transition: 'background 0.15s ease',
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)')}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-              title="Wi-Fi, Pi Hotspot & Mobile Link QR"
-            >
-              <Wifi size={15} style={{ color: '#22c55e' }} />
-              <span
+            {/* Multi-User Companion Management (Restricted: Admin Only) */}
+            {isAdmin && (
+              <button
+                onClick={() => setIsUsersModalOpen(true)}
                 style={{
-                  position: 'absolute',
-                  top: '6px',
-                  right: '6px',
-                  width: '5px',
-                  height: '5px',
+                  width: '32px',
+                  height: '32px',
                   borderRadius: '50%',
-                  backgroundColor: '#22c55e',
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-secondary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  transition: 'background 0.15s ease',
                 }}
-              />
-            </button>
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                title="Companion Users & Permissions"
+              >
+                <Users size={15} />
+              </button>
+            )}
 
-            {/* Multi-User Companion Management */}
-            <button
-              onClick={() => setIsUsersModalOpen(true)}
-              style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '50%',
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--text-secondary)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                transition: 'background 0.15s ease',
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)')}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-              title="Companion Users & Permissions"
-            >
-              <Users size={15} />
-            </button>
+            {/* Hardware Guardian & Thermal Protection (Restricted: Member/Admin Only) */}
+            {(isAdmin || userRole === 'member') && (
+              <button
+                onClick={() => setIsHardwareGuardianOpen(true)}
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  background: 'transparent',
+                  border: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  transition: 'background 0.15s ease',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                title="Hardware Guardian & Thermal Protection"
+              >
+                <ShieldCheck size={15} style={{ color: '#10b981' }} />
+              </button>
+            )}
 
-            {/* Hardware Guardian & Thermal Protection */}
-            <button
-              onClick={() => setIsHardwareGuardianOpen(true)}
-              style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '50%',
-                background: 'transparent',
-                border: 'none',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                transition: 'background 0.15s ease',
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)')}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-              title="Hardware Guardian & Thermal Protection"
-            >
-              <ShieldCheck size={15} style={{ color: '#10b981' }} />
-            </button>
-
-            {/* Secret Admin Command Station (Only visible to admin) */}
-            {(user?.role === 'admin' || !user?.role) && (
+            {/* Secret Admin Command Station (Restricted: Admin Only) */}
+            {isAdmin && (
               <button
                 onClick={() => setIsAdminStationOpen(true)}
                 style={{
@@ -603,12 +629,29 @@ export function DashboardPage() {
               </button>
             )}
 
+            {/* Guest Read-Only Badge */}
+            {isGuest && (
+              <span
+                style={{
+                  fontSize: '0.66rem',
+                  fontWeight: 700,
+                  padding: '2px 8px',
+                  borderRadius: '12px',
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  color: 'var(--text-muted)',
+                  letterSpacing: '0.04em',
+                }}
+              >
+                GUEST
+              </span>
+            )}
+
             {/* Subtle Divider */}
             <div style={{ width: '1px', height: '18px', backgroundColor: 'rgba(255, 255, 255, 0.12)', margin: '0 2px' }} />
 
             {/* User Initial Avatar */}
             <div
-              title={`Signed in as ${user?.username || 'User'}`}
+              title={`Signed in as ${user?.username || 'User'} (${userRole.toUpperCase()})`}
               style={{
                 width: '26px',
                 height: '26px',
@@ -627,28 +670,30 @@ export function DashboardPage() {
               {user?.username?.charAt(0).toUpperCase() || 'U'}
             </div>
 
-            {/* Factory Hard Reset Button */}
-            <button
-              onClick={() => setIsFactoryResetOpen(true)}
-              style={{
-                width: '30px',
-                height: '30px',
-                borderRadius: '50%',
-                background: 'transparent',
-                border: 'none',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                color: 'rgba(239, 68, 68, 0.65)',
-                transition: 'background 0.15s ease',
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.12)')}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-              title="Factory Hard Reset (Wipe all media & data)"
-            >
-              <Trash2 size={14} />
-            </button>
+            {/* Factory Hard Reset Button (Restricted: Admin Only) */}
+            {isAdmin && (
+              <button
+                onClick={() => setIsFactoryResetOpen(true)}
+                style={{
+                  width: '30px',
+                  height: '30px',
+                  borderRadius: '50%',
+                  background: 'transparent',
+                  border: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  color: 'rgba(239, 68, 68, 0.65)',
+                  transition: 'background 0.15s ease',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.12)')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                title="Factory Hard Reset (Wipe all media & data)"
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
 
             {/* Logout Button */}
             <button
@@ -676,10 +721,12 @@ export function DashboardPage() {
         </div>
       </header>
 
-      {/* Amber Active Vault Banner */}
-      <div style={{ marginBottom: 'var(--space-4)' }}>
-        <VaultBanner />
-      </div>
+      {/* Amber Active Vault Banner (Restricted: Member/Admin Only) */}
+      {canAccessVault && (
+        <div style={{ marginBottom: 'var(--space-4)' }}>
+          <VaultBanner />
+        </div>
+      )}
 
       {/* Tabs & Category Filter Sub-Header */}
       <div
@@ -778,35 +825,37 @@ export function DashboardPage() {
             </span>
           </button>
 
-          {/* Dedicated Private Vault Tab */}
-          <button
-            className={`btn ${activeTab === 'vault' ? 'btn-primary' : 'btn-ghost'}`}
-            onClick={() => setActiveTab('vault')}
-            style={{
-              fontSize: '0.85rem',
-              padding: '0.45rem 0.95rem',
-              borderColor: activeTab === 'vault' ? 'var(--vault-primary)' : 'var(--vault-border)',
-              background: activeTab === 'vault' ? 'var(--vault-primary)' : 'var(--vault-subtle)',
-              color: activeTab === 'vault' ? '#000000' : 'var(--vault-primary)',
-            }}
-          >
-            {isUnlocked ? <Unlock size={14} /> : <Lock size={14} />}
-            <span>Private Vault</span>
-            {isUnlocked && (
-              <span
-                style={{
-                  background: activeTab === 'vault' ? '#000000' : 'rgba(245, 158, 11, 0.25)',
-                  color: activeTab === 'vault' ? 'var(--vault-primary)' : 'var(--vault-primary)',
-                  borderRadius: 'var(--radius-full)',
-                  padding: '1px 6px',
-                  fontSize: '0.7rem',
-                  marginLeft: '4px',
-                }}
-              >
-                {totalVaultItems}
-              </span>
-            )}
-          </button>
+          {/* Dedicated Private Vault Tab (Restricted: Member/Admin Only) */}
+          {canAccessVault && (
+            <button
+              className={`btn ${activeTab === 'vault' ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setActiveTab('vault')}
+              style={{
+                fontSize: '0.85rem',
+                padding: '0.45rem 0.95rem',
+                borderColor: activeTab === 'vault' ? 'var(--vault-primary)' : 'var(--vault-border)',
+                background: activeTab === 'vault' ? 'var(--vault-primary)' : 'var(--vault-subtle)',
+                color: activeTab === 'vault' ? '#000000' : 'var(--vault-primary)',
+              }}
+            >
+              {isUnlocked ? <Unlock size={14} /> : <Lock size={14} />}
+              <span>Private Vault</span>
+              {isUnlocked && (
+                <span
+                  style={{
+                    background: activeTab === 'vault' ? '#000000' : 'rgba(245, 158, 11, 0.25)',
+                    color: activeTab === 'vault' ? 'var(--vault-primary)' : 'var(--vault-primary)',
+                    borderRadius: 'var(--radius-full)',
+                    padding: '1px 6px',
+                    fontSize: '0.7rem',
+                    marginLeft: '4px',
+                  }}
+                >
+                  {totalVaultItems}
+                </span>
+              )}
+            </button>
+          )}
         </div>
 
         {/* Category Filter Chips */}
@@ -845,25 +894,27 @@ export function DashboardPage() {
                 {cat.name}
               </button>
             ))}
-            <button
-              onClick={() => void handleCreateCategory()}
-              style={{
-                background: 'transparent',
-                border: '1px dashed var(--border-strong)',
-                color: 'var(--text-muted)',
-                padding: '0.25rem 0.55rem',
-                borderRadius: 'var(--radius-full)',
-                fontSize: '0.75rem',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '3px',
-              }}
-              title="Create new category"
-            >
-              <FolderPlus size={12} />
-              <span>Category</span>
-            </button>
+            {canWrite && (
+              <button
+                onClick={() => void handleCreateCategory()}
+                style={{
+                  background: 'transparent',
+                  border: '1px dashed var(--border-strong)',
+                  color: 'var(--text-muted)',
+                  padding: '0.25rem 0.55rem',
+                  borderRadius: 'var(--radius-full)',
+                  fontSize: '0.75rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '3px',
+                }}
+                title="Create new category"
+              >
+                <FolderPlus size={12} />
+                <span>Category</span>
+              </button>
+            )}
             <button
               onClick={() => void reloadAll()}
               style={{
@@ -892,7 +943,8 @@ export function DashboardPage() {
               <VideosView
                 videos={normalMovies}
                 onSelectVideo={(v) => setPlayingVideo(v)}
-                onOpenUpload={() => setIsUploadOpen(true)}
+                onOpenUpload={canWrite ? () => setIsUploadOpen(true) : undefined}
+                canAccessVault={canAccessVault}
               />
             )}
             {activeTab === 'songs' && (
@@ -901,7 +953,7 @@ export function DashboardPage() {
                 currentTrackId={playingAudio?.id}
                 isPlaying={!!playingAudio}
                 onSelectSong={(s) => setPlayingAudio(s)}
-                onDeleteSong={handleDeleteMedia}
+                onDeleteSong={canWrite ? handleDeleteMedia : undefined}
                 onTogglePlay={() => {
                   if (playingAudio) {
                     setPlayingAudio(null);
@@ -909,17 +961,19 @@ export function DashboardPage() {
                     setPlayingAudio(normalSongs[0]);
                   }
                 }}
-                onOpenUpload={() => setIsUploadOpen(true)}
+                onOpenUpload={canWrite ? () => setIsUploadOpen(true) : undefined}
               />
             )}
             {activeTab === 'photos' && (
               <PhotosView
                 photos={normalMemories}
                 onSelectPhoto={(p) => setViewingPhoto(p)}
-                onOpenUpload={() => setIsUploadOpen(true)}
-                onDeleteMedia={handleDeleteMedia}
-                onBatchDelete={handleBatchDeleteMedia}
-                onReclassify={handleReclassifyMedia}
+                onOpenUpload={canWrite ? () => setIsUploadOpen(true) : undefined}
+                onDeleteMedia={canWrite ? handleDeleteMedia : undefined}
+                onBatchDelete={canWrite ? handleBatchDeleteMedia : undefined}
+                onReclassify={canWrite ? handleReclassifyMedia : undefined}
+                canAccessVault={canAccessVault}
+                canWrite={canWrite}
               />
             )}
             {activeTab === 'notes' && (
@@ -929,13 +983,13 @@ export function DashboardPage() {
                   setEditingNote(n);
                   setIsNoteEditorOpen(true);
                 }}
-                onOpenNewNote={() => {
+                onOpenNewNote={canWrite ? () => {
                   setEditingNote(null);
                   setIsNoteEditorOpen(true);
-                }}
+                } : undefined}
               />
             )}
-            {activeTab === 'vault' && (
+            {activeTab === 'vault' && canAccessVault && (
               <VaultView
                 media={mediaList}
                 notes={notesList}
@@ -976,6 +1030,7 @@ export function DashboardPage() {
         vaultCount={totalVaultItems}
         isVaultUnlocked={isUnlocked}
         onOpenVaultModal={openUnlockModal}
+        canAccessVault={canAccessVault}
       />
     </div>
   );

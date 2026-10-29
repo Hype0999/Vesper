@@ -385,7 +385,11 @@ export class AdminService {
 
         let itemSubType = options.subType === 'auto' ? undefined : options.subType;
 
+        const stats = fs.statSync(filePath);
         const fileStream = fs.createReadStream(filePath);
+        fileStream.on('error', (streamErr) => {
+          logger.warn({ err: streamErr, filePath }, 'Read stream error during ingestion');
+        });
 
         const ingestPromise = this.mediaService.saveMediaFile({
           userId: options.userId,
@@ -399,20 +403,31 @@ export class AdminService {
           tags: options.tags,
         });
 
-        // Strict 25-second per-file guard to prevent multi-file batch stalls
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Ingestion timed out after 25 seconds')), 25000)
-        );
-
-        const savedMedia = await Promise.race([ingestPromise, timeoutPromise]);
-
-        results.push({
-          filePath,
-          title: baseTitle,
-          status: 'success',
-          mediaId: savedMedia.id,
+        // Dynamic transfer budget based on file size: minimum 180s (3 minutes), scaling for multi-GB files
+        const timeoutMs = Math.max(180_000, Math.ceil((stats.size / (5 * 1024 * 1024)) * 1000) + 60_000);
+        let timeoutHandle: NodeJS.Timeout | undefined;
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          timeoutHandle = setTimeout(() => {
+            if (!fileStream.destroyed) fileStream.destroy();
+            reject(new Error(`Ingestion timed out for ${fileName} after ${Math.round(timeoutMs / 1000)}s`));
+          }, timeoutMs);
         });
-        importedCount++;
+
+        try {
+          const savedMedia = await Promise.race([ingestPromise, timeoutPromise]);
+          if (timeoutHandle) clearTimeout(timeoutHandle);
+
+          results.push({
+            filePath,
+            title: baseTitle,
+            status: 'success',
+            mediaId: savedMedia.id,
+          });
+          importedCount++;
+        } finally {
+          if (timeoutHandle) clearTimeout(timeoutHandle);
+          if (!fileStream.destroyed) fileStream.destroy();
+        }
       } catch (err: any) {
         logger.error({ err, filePath }, 'Failed to ingest media file from drive');
         results.push({

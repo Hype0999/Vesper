@@ -25,7 +25,7 @@ export const SongsView: React.FC<SongsViewProps> = ({
   const [hoveredTrackId, setHoveredTrackId] = useState<string | null>(null);
 
   const formatDuration = (seconds?: number | null): string => {
-    if (!seconds || seconds <= 0) return '--:--';
+    if (!seconds || isNaN(seconds) || !isFinite(seconds) || seconds <= 0) return '--:--';
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
