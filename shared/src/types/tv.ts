@@ -52,3 +52,4 @@ export interface TvSessionStatus {
   playback: TvPlaybackState;
   activeClientCount: number;
 }
+
