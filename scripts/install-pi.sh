@@ -107,18 +107,25 @@ fi
 echo -e "\n${BLUE}[3/8] Setting up environment configuration & storage...${NC}"
 cd "$SCRIPT_DIR"
 
-if [ ! -f ".env" ]; then
-  if [ -f ".env.example" ]; then
-    cp .env.example .env
-  else
-    cat << 'EOF' > .env
+# Ensure .env exists with a cryptographically secure 64-char SESSION_SECRET
+if [ ! -f "$SCRIPT_DIR/.env" ]; then
+  GEN_SECRET=$(openssl rand -hex 32 2>/dev/null || node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
+  cat << EOF > "$SCRIPT_DIR/.env"
+NODE_ENV=production
 PORT=3000
 HOST=0.0.0.0
-NODE_ENV=production
-APP_NAME=Vesper
 STORAGE_DIR=./storage
-CORS_ORIGIN=*
+SESSION_SECRET=${GEN_SECRET}
+ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://vesper.local:3000,http://$(hostname).local:3000
+LOG_LEVEL=info
 EOF
+  chown "$REAL_USER:$REAL_USER" "$SCRIPT_DIR/.env"
+  chmod 600 "$SCRIPT_DIR/.env"
+else
+  # Ensure existing .env has a valid SESSION_SECRET
+  if ! grep -q "^SESSION_SECRET=" "$SCRIPT_DIR/.env" || grep -q "^SESSION_SECRET=$" "$SCRIPT_DIR/.env"; then
+    GEN_SECRET=$(openssl rand -hex 32 2>/dev/null || node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
+    echo "SESSION_SECRET=${GEN_SECRET}" >> "$SCRIPT_DIR/.env"
   fi
 fi
 
@@ -126,6 +133,7 @@ fi
 mkdir -p "$SCRIPT_DIR/storage/originals"
 mkdir -p "$SCRIPT_DIR/storage/thumbnails"
 mkdir -p "$SCRIPT_DIR/storage/vault"
+mkdir -p "$SCRIPT_DIR/storage/database"
 chown -R "$REAL_USER:$REAL_USER" "$SCRIPT_DIR"
 
 # 4. Install npm dependencies & build full production bundle
@@ -156,11 +164,12 @@ chmod 644 /etc/systemd/system/vesper-tv.service
 # 7. Create Vesper Systemd Service for Auto-Start on Boot with Zero Failure
 echo -e "\n${BLUE}[7/8] Creating systemd service for Vesper Sanctuary core auto-start...${NC}"
 
+NODE_BIN=$(command -v node || which node)
 SERVICE_FILE="/etc/systemd/system/vesper.service"
 cat << EOF > "$SERVICE_FILE"
 [Unit]
 Description=Vesper Personal Media Sanctuary Core Server
-After=network.target avahi-daemon.service NetworkManager.service vesper-autohotspot.service
+After=network.target avahi-daemon.service NetworkManager.service
 Wants=network.target
 Documentation=https://github.com/vesper-sanctuary
 
@@ -171,7 +180,8 @@ WorkingDirectory=$SCRIPT_DIR
 Environment=NODE_ENV=production
 Environment=PORT=3000
 Environment=HOST=0.0.0.0
-ExecStart=$(which npm) run start
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+ExecStart=$NODE_BIN server/dist/server.js
 Restart=always
 RestartSec=3
 KillMode=mixed
@@ -194,12 +204,20 @@ systemctl restart vesper.service
 
 # 8. Verify Service Status and Detect IP
 echo -e "\n${BLUE}[8/8] Verifying service status...${NC}"
-sleep 2
+SERVICE_UP=0
+for i in $(seq 1 10); do
+  if systemctl is-active --quiet vesper.service; then
+    SERVICE_UP=1
+    break
+  fi
+  sleep 1
+done
 
-if systemctl is-active --quiet vesper.service; then
+if [ "$SERVICE_UP" -eq 1 ]; then
   echo -e "${GREEN}${BOLD}[✓] SUCCESS! Vesper Sanctuary is running in the background.${NC}"
 else
-  echo -e "${RED}[!] Service failed to start immediately. Check: journalctl -u vesper.service -n 20${NC}"
+  echo -e "${YELLOW}[!] Inspecting startup journal logs:${NC}"
+  journalctl -u vesper.service -n 15 --no-pager
 fi
 
 # Extract primary IP addresses
