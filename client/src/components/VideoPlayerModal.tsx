@@ -249,7 +249,9 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
 
   const skipTime = (deltaSeconds: number) => {
     if (!videoRef.current) return;
-    videoRef.current.currentTime = Math.max(0, Math.min(videoRef.current.duration || 0, videoRef.current.currentTime + deltaSeconds));
+    const dur = effectiveDuration || (videoRef.current.duration ?? 0);
+    const maxTime = isFinite(dur) && dur > 0 ? dur : Infinity;
+    videoRef.current.currentTime = Math.max(0, Math.min(maxTime, videoRef.current.currentTime + deltaSeconds));
   };
 
   const adjustVolume = (delta: number) => {
@@ -302,10 +304,12 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   };
 
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!videoRef.current || !duration) return;
+    if (!videoRef.current) return;
+    const dur = effectiveDuration || (videoRef.current.duration ?? 0);
+    if (!dur || !isFinite(dur) || dur <= 0) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    videoRef.current.currentTime = pos * duration;
+    videoRef.current.currentTime = pos * dur;
   };
 
   const handleShare = async () => {
@@ -344,7 +348,14 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
 
   const streamUrl = `/api/media/${media.id}/stream`;
   const relatedVideos = allVideos.filter((v) => v.id !== media.id && v.type === 'video');
-  const progressPercent = duration ? (currentTime / duration) * 100 : 0;
+  const effectiveDuration = Math.max(
+    duration || 0,
+    currentTime || 0,
+    media.duration && isFinite(media.duration) ? media.duration : 0
+  );
+  const progressPercent = effectiveDuration > 0
+    ? Math.min(100, Math.max(0, (currentTime / effectiveDuration) * 100))
+    : 0;
 
   return (
     <div
@@ -407,10 +418,13 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
             onTimeUpdate={() => {
               if (videoRef.current) {
                 const ct = videoRef.current.currentTime;
-                if (isFinite(ct)) setCurrentTime(ct);
+                if (isFinite(ct)) {
+                  setCurrentTime(ct);
+                  if (ct > duration) setDuration(ct);
+                }
                 const d = videoRef.current.duration;
-                if (isFinite(d) && d > 0 && d !== duration) {
-                  setDuration(d);
+                if (isFinite(d) && d > 0) {
+                  setDuration(Math.max(d, isFinite(ct) ? ct : 0));
                 }
               }
             }}
@@ -640,9 +654,11 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
               }}
               onClick={handleSeek}
               onMouseMove={(e) => {
+                const dur = effectiveDuration || (videoRef.current?.duration ?? 0);
+                if (!dur || !isFinite(dur) || dur <= 0) return;
                 const rect = e.currentTarget.getBoundingClientRect();
                 const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-                setHoverScrubTime(pos * duration);
+                setHoverScrubTime(pos * dur);
                 setHoverScrubX(e.clientX - rect.left);
               }}
               style={{
@@ -842,7 +858,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
                     userSelect: 'none',
                   }}
                 >
-                  {formatTime(currentTime)} / {formatTime(duration)}
+                  {formatTime(currentTime)} / {formatTime(effectiveDuration)}
                 </span>
               </div>
 

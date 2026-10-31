@@ -132,6 +132,16 @@ export const TvModePage: React.FC = () => {
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
+  // Guard against non-finite or premature duration values
+  const effectiveDuration = Math.max(
+    duration || 0,
+    currentTime || 0,
+    activeMedia?.duration && isFinite(activeMedia.duration) ? activeMedia.duration : 0
+  );
+  const progressPercent = effectiveDuration > 0
+    ? Math.min(100, Math.max(0, (currentTime / effectiveDuration) * 100))
+    : 0;
+
   // Play a media item on the TV
   const playMedia = useCallback(
     (media: MediaItem, startSeconds: number = 0) => {
@@ -724,9 +734,22 @@ export const TvModePage: React.FC = () => {
               if (videoRef.current) {
                 const cur = videoRef.current.currentTime;
                 const dur = videoRef.current.duration;
-                if (isFinite(cur)) setCurrentTime(cur);
-                if (isFinite(dur) && dur > 0) setDuration(dur);
+                if (isFinite(cur)) {
+                  setCurrentTime(cur);
+                  if (cur > duration) setDuration(cur);
+                }
+                if (isFinite(dur) && dur > 0) setDuration(Math.max(dur, isFinite(cur) ? cur : 0));
                 reportPlaybackToServer(cur, dur, isPlaying ? 'playing' : 'paused');
+              }
+            }}
+            onLoadedMetadata={() => {
+              if (videoRef.current) {
+                const dur = videoRef.current.duration;
+                if (isFinite(dur) && dur > 0) {
+                  setDuration(dur);
+                } else if (activeMedia?.duration && isFinite(activeMedia.duration) && activeMedia.duration > 0) {
+                  setDuration(activeMedia.duration);
+                }
               }
             }}
             onPlay={() => setIsPlaying(true)}
@@ -808,7 +831,7 @@ export const TvModePage: React.FC = () => {
                 <div
                   style={{
                     height: '100%',
-                    width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%`,
+                    width: `${progressPercent}%`,
                     backgroundColor: '#38bdf8',
                     boxShadow: '0 0 14px rgba(56, 189, 248, 0.8)',
                     transition: 'width 0.2s linear',
@@ -836,7 +859,7 @@ export const TvModePage: React.FC = () => {
                   </button>
 
                   <span style={{ fontSize: '1.1rem', fontWeight: 600, color: '#f1f5f9' }}>
-                    {formatTime(currentTime)} / {formatTime(duration)}
+                    {formatTime(currentTime)} / {formatTime(effectiveDuration)}
                   </span>
                 </div>
 

@@ -142,6 +142,21 @@ export async function buildApp() {
   // 4. Register API Routes
   await app.register(apiRoutes, { prefix: '/api' });
 
+  // 4.1 Favicon Fallback Route
+  app.get('/favicon.ico', async (_request, reply) => {
+    const candidateIcoPaths = [
+      path.resolve(__dirname, '../../client/dist/favicon.ico'),
+      path.resolve(__dirname, '../../client/public/favicon.ico'),
+      path.resolve(process.cwd(), 'client/dist/favicon.ico'),
+      path.resolve(process.cwd(), 'client/public/favicon.ico'),
+    ];
+    const foundPath = candidateIcoPaths.find((p) => fs.existsSync(p));
+    if (foundPath) {
+      return reply.type('image/x-icon').send(fs.readFileSync(foundPath));
+    }
+    return reply.status(204).send();
+  });
+
   // 5. Static Client SPA Serving (In production or if client/dist exists)
   const candidateDistPaths = [
     path.resolve(__dirname, '../../client/dist'),

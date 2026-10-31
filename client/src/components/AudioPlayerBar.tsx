@@ -79,10 +79,16 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
 
   // Seek handler
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!audioRef.current || !duration) return;
+    if (!audioRef.current) return;
+    const dur = Math.max(
+      duration || 0,
+      currentTime || 0,
+      currentTrack?.duration && isFinite(currentTrack.duration) ? currentTrack.duration : 0
+    ) || audioRef.current.duration;
+    if (!dur || !isFinite(dur) || dur <= 0) return;
     const rect = e.currentTarget.getBoundingClientRect();
-    const pos = (e.clientX - rect.left) / rect.width;
-    audioRef.current.currentTime = pos * duration;
+    const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    audioRef.current.currentTime = pos * dur;
   };
 
   // Speed cycle
@@ -141,12 +147,25 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
 
   if (!currentTrack) return null;
 
-  const formatTime = (seconds: number) => {
+  const formatTime = (seconds: number): string => {
     if (!seconds || isNaN(seconds) || !isFinite(seconds) || seconds < 0) return '0:00';
-    const m = Math.floor(seconds / 60);
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
     const s = Math.floor(seconds % 60);
+    if (h > 0) {
+      return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    }
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
+
+  const effectiveDuration = Math.max(
+    duration || 0,
+    currentTime || 0,
+    currentTrack.duration && isFinite(currentTrack.duration) ? currentTrack.duration : 0
+  );
+  const progressPercent = effectiveDuration > 0
+    ? Math.min(100, Math.max(0, (currentTime / effectiveDuration) * 100))
+    : 0;
 
   return (
     <>
@@ -155,7 +174,14 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
         onTimeUpdate={() => {
           if (audioRef.current) {
             const ct = audioRef.current.currentTime;
-            if (isFinite(ct)) setCurrentTime(ct);
+            if (isFinite(ct)) {
+              setCurrentTime(ct);
+              if (ct > duration) setDuration(ct);
+            }
+            const d = audioRef.current.duration;
+            if (isFinite(d) && d > 0) {
+              setDuration(Math.max(d, isFinite(ct) ? ct : 0));
+            }
           }
         }}
         onLoadedMetadata={() => {
@@ -290,7 +316,7 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
               <div
                 style={{
                   height: '100%',
-                  width: `${duration ? (currentTime / duration) * 100 : 0}%`,
+                  width: `${progressPercent}%`,
                   background: 'linear-gradient(90deg, #10b981, #1ed760)',
                   borderRadius: '3px',
                 }}
@@ -298,7 +324,7 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#9ca3af', marginTop: '6px' }}>
               <span>{formatTime(currentTime)}</span>
-              <span>{formatTime(duration)}</span>
+              <span>{formatTime(effectiveDuration)}</span>
             </div>
           </div>
 
@@ -372,7 +398,7 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
           <div
             style={{
               height: '100%',
-              width: `${duration ? (currentTime / duration) * 100 : 0}%`,
+              width: `${progressPercent}%`,
               background: 'var(--spotify-green)',
               transition: 'width 0.1s linear',
             }}
@@ -424,7 +450,7 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
               <div style={{ fontSize: '0.72rem', color: 'var(--spotify-green)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                 {currentTrack.isPrivate ? 'Vault Track' : (currentTrack.categoryName || 'Music')}
                 <span style={{ color: '#4b5563' }}>•</span>
-                <span>{formatTime(currentTime)} / {formatTime(duration)}</span>
+                <span>{formatTime(currentTime)} / {formatTime(effectiveDuration)}</span>
               </div>
             </div>
           </div>
