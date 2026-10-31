@@ -3,10 +3,21 @@ import { VaultProvider } from './context/VaultContext';
 import { SetupWizard } from './pages/SetupWizard';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
+import { TvModePage } from './pages/TvModePage';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 function AppContent() {
   const { isInitialized, user, loading } = useAuth();
+
+  // If accessing TV mode directly (/tv or ?tv=1)
+  const isTvRoute =
+    window.location.pathname === '/tv' ||
+    window.location.search.includes('tv=1') ||
+    window.location.search.includes('kiosk=1');
+
+  if (isTvRoute) {
+    return <TvModePage />;
+  }
 
   if (loading) {
     return (

@@ -47,6 +47,9 @@ apt-get install -y -qq \
   avahi-utils \
   network-manager \
   libnss-mdns \
+  cec-utils \
+  alsa-utils \
+  chromium-browser \
   qrencode > /dev/null
 
 # Enable & restart Avahi for .local mDNS broadcast
@@ -102,15 +105,25 @@ sudo -u "$REAL_USER" npm install --no-audit --no-fund
 sudo -u "$REAL_USER" npm run build
 
 # 5. Install Vesper Auto-Hotspot Failover Service (Solves Train Travel / Missing Home Wi-Fi)
-echo -e "\n${BLUE}[5/7] Installing Vesper Auto-Hotspot Travel Failover service...${NC}"
+echo -e "\n${BLUE}[5/8] Installing Vesper Auto-Hotspot Travel Failover service...${NC}"
 cp "$SCRIPT_DIR/scripts/vesper-autohotspot.sh" /usr/local/bin/vesper-autohotspot.sh
 chmod +x /usr/local/bin/vesper-autohotspot.sh
 
 cp "$SCRIPT_DIR/scripts/vesper-autohotspot.service" /etc/systemd/system/vesper-autohotspot.service
 chmod 644 /etc/systemd/system/vesper-autohotspot.service
 
-# 6. Create Vesper Systemd Service for Auto-Start on Boot with Zero Failure
-echo -e "\n${BLUE}[6/7] Creating systemd service for Vesper Sanctuary core auto-start...${NC}"
+# 6. Install Vesper Auto-HDMI TV Kiosk & CEC Remote Service
+echo -e "\n${BLUE}[6/8] Installing Vesper Auto-HDMI TV Kiosk & CEC Remote Service...${NC}"
+cp "$SCRIPT_DIR/scripts/vesper-tv-kiosk.sh" /usr/local/bin/vesper-tv-kiosk.sh
+chmod +x /usr/local/bin/vesper-tv-kiosk.sh
+cp "$SCRIPT_DIR/scripts/test-hdmi-cec.sh" /usr/local/bin/test-hdmi-cec.sh
+chmod +x /usr/local/bin/test-hdmi-cec.sh
+
+cp "$SCRIPT_DIR/scripts/vesper-tv.service" /etc/systemd/system/vesper-tv.service
+chmod 644 /etc/systemd/system/vesper-tv.service
+
+# 7. Create Vesper Systemd Service for Auto-Start on Boot with Zero Failure
+echo -e "\n${BLUE}[7/8] Creating systemd service for Vesper Sanctuary core auto-start...${NC}"
 
 SERVICE_FILE="/etc/systemd/system/vesper.service"
 cat << EOF > "$SERVICE_FILE"
@@ -145,10 +158,11 @@ ln -sf /etc/systemd/system/vesper.service /etc/systemd/system/travelhub.service
 systemctl daemon-reload
 systemctl enable vesper-autohotspot.service
 systemctl enable vesper.service
+systemctl enable vesper-tv.service || true
 systemctl restart vesper.service
 
-# 7. Verify Service Status and Detect IP
-echo -e "\n${BLUE}[7/7] Verifying service status...${NC}"
+# 8. Verify Service Status and Detect IP
+echo -e "\n${BLUE}[8/8] Verifying service status...${NC}"
 sleep 2
 
 if systemctl is-active --quiet vesper.service; then

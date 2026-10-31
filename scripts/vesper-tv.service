@@ -1,0 +1,17 @@
+[Unit]
+Description=Vesper HDMI TV Kiosk & Auto-Display Service
+After=network.target vesper.service graphical.target
+Wants=vesper.service
+
+[Service]
+Type=simple
+User=pi
+Environment=DISPLAY=:0
+Environment=WAYLAND_DISPLAY=wayland-0
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+ExecStart=/usr/local/bin/vesper-tv-kiosk.sh start
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical.target

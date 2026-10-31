@@ -20,6 +20,7 @@ import { NetworkSettingsModal } from '../components/NetworkSettingsModal';
 import { UsersModal } from '../components/UsersModal';
 import { HardwareGuardianModal } from '../components/HardwareGuardianModal';
 import { AdminCommandCenterModal } from '../components/AdminCommandCenterModal';
+import { TvRemoteModal } from '../components/TvRemoteModal';
 import { VesperLogo } from '../components/VesperLogo';
 import { MobileBottomNav } from '../components/MobileBottomNav';
 import {
@@ -41,6 +42,7 @@ import {
   Users,
   ShieldCheck,
   HardDrive,
+  Tv,
 } from 'lucide-react';
 import type { MediaItem, NoteItem, Category } from '@media-hub/shared';
 
@@ -75,10 +77,53 @@ export function DashboardPage() {
   const [isUsersModalOpen, setIsUsersModalOpen] = useState<boolean>(false);
   const [isHardwareGuardianOpen, setIsHardwareGuardianOpen] = useState<boolean>(false);
   const [isAdminStationOpen, setIsAdminStationOpen] = useState<boolean>(false);
+  const [isTvRemoteOpen, setIsTvRemoteOpen] = useState<boolean>(false);
+  const [isHdmiConnected, setIsHdmiConnected] = useState<boolean>(false);
   const [editingNote, setEditingNote] = useState<NoteItem | null>(null);
   const [playingVideo, setPlayingVideo] = useState<MediaItem | null>(null);
   const [viewingPhoto, setViewingPhoto] = useState<MediaItem | null>(null);
   const [playingAudio, setPlayingAudio] = useState<MediaItem | null>(null);
+
+  // Monitor HDMI TV connection status
+  useEffect(() => {
+    let isMounted = true;
+    const checkTvStatus = async () => {
+      try {
+        const res = await fetch('/api/tv/status');
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && isMounted) {
+            setIsHdmiConnected(Boolean(json.data?.hdmi?.connected));
+          }
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    void checkTvStatus();
+    const interval = setInterval(checkTvStatus, 6000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  const handleCastToTv = async (media: MediaItem) => {
+    try {
+      await fetch('/api/tv/cast', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: JSON.stringify({ mediaId: media.id }),
+      });
+      setIsTvRemoteOpen(true);
+    } catch {
+      // ignore
+    }
+  };
 
   // Fetch Categories
   const fetchCategories = useCallback(async () => {
@@ -232,7 +277,8 @@ export function DashboardPage() {
     isNetworkModalOpen ||
     isUsersModalOpen ||
     isHardwareGuardianOpen ||
-    isAdminStationOpen
+    isAdminStationOpen ||
+    isTvRemoteOpen
   );
 
   // Mobile Back Button Navigation Guard:
@@ -254,6 +300,7 @@ export function DashboardPage() {
         else if (isUsersModalOpen) setIsUsersModalOpen(false);
         else if (isHardwareGuardianOpen) setIsHardwareGuardianOpen(false);
         else if (isAdminStationOpen) setIsAdminStationOpen(false);
+        else if (isTvRemoteOpen) setIsTvRemoteOpen(false);
         else if (isFactoryResetOpen) setIsFactoryResetOpen(false);
       };
 
@@ -272,6 +319,7 @@ export function DashboardPage() {
     isUsersModalOpen,
     isHardwareGuardianOpen,
     isAdminStationOpen,
+    isTvRemoteOpen,
     isFactoryResetOpen,
   ]);
 
@@ -306,6 +354,7 @@ export function DashboardPage() {
         onDelete={canWrite ? handleDeleteMedia : undefined}
         onSelectRelatedVideo={(v) => setPlayingVideo(v)}
         onReclassify={canWrite ? handleReclassifyMedia : undefined}
+        onCastToTv={handleCastToTv}
       />
       <PhotoLightboxModal
         media={viewingPhoto}
@@ -340,6 +389,11 @@ export function DashboardPage() {
           void fetchMedia();
           void fetchNotes();
         }}
+      />
+      <TvRemoteModal
+        isOpen={isTvRemoteOpen}
+        onClose={() => setIsTvRemoteOpen(false)}
+        isAdmin={isAdmin}
       />
       <AudioPlayerBar
         currentTrack={playingAudio}
@@ -604,6 +658,43 @@ export function DashboardPage() {
                 <ShieldCheck size={15} style={{ color: '#10b981' }} />
               </button>
             )}
+
+            {/* HDMI TV & CEC Remote Control */}
+            <button
+              onClick={() => setIsTvRemoteOpen(true)}
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                background: isHdmiConnected ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
+                border: isHdmiConnected ? '1px solid rgba(16, 185, 129, 0.35)' : 'none',
+                color: isHdmiConnected ? '#34d399' : 'var(--text-secondary)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                position: 'relative',
+                transition: 'background 0.15s ease',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)')}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = isHdmiConnected ? 'rgba(16, 185, 129, 0.15)' : 'transparent')}
+              title={isHdmiConnected ? 'HDMI TV Connected — Open Living Room Remote' : 'Vesper TV Remote (HDMI Standby)'}
+            >
+              <Tv size={15} style={{ color: isHdmiConnected ? '#34d399' : 'var(--text-secondary)' }} />
+              {isHdmiConnected && (
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: '6px',
+                    right: '6px',
+                    width: '5px',
+                    height: '5px',
+                    borderRadius: '50%',
+                    backgroundColor: '#22c55e',
+                  }}
+                />
+              )}
+            </button>
 
             {/* Secret Admin Command Station (Restricted: Admin Only) */}
             {isAdmin && (
@@ -1031,6 +1122,8 @@ export function DashboardPage() {
         isVaultUnlocked={isUnlocked}
         onOpenVaultModal={openUnlockModal}
         canAccessVault={canAccessVault}
+        onOpenTvRemote={() => setIsTvRemoteOpen(true)}
+        isHdmiConnected={isHdmiConnected}
       />
     </div>
   );

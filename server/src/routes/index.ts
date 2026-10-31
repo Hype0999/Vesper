@@ -9,6 +9,7 @@ import { categoriesRoutes } from './categories.routes.js';
 import { networkRoutes } from './network.routes.js';
 import { usersRoutes } from './users.routes.js';
 import { adminRoutes } from './admin.routes.js';
+import { tvRoutes } from './tv.routes.js';
 
 export const apiRoutes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(healthRoutes, { prefix: '/system' });
@@ -21,6 +22,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(networkRoutes, { prefix: '/network' });
   await fastify.register(usersRoutes, { prefix: '/users' });
   await fastify.register(adminRoutes, { prefix: '/admin' });
+  await fastify.register(tvRoutes, { prefix: '/tv' });
 };
 
 

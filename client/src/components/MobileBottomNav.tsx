@@ -1,5 +1,5 @@
 import React from 'react';
-import { Film, Music, Image as ImageIcon, FileText, Lock, Unlock } from 'lucide-react';
+import { Film, Music, Image as ImageIcon, FileText, Lock, Unlock, Tv } from 'lucide-react';
 
 export type ActiveTab = 'videos' | 'songs' | 'photos' | 'notes' | 'vault';
 
@@ -14,6 +14,8 @@ interface MobileBottomNavProps {
   isVaultUnlocked: boolean;
   canAccessVault?: boolean;
   onOpenVaultModal?: () => void;
+  onOpenTvRemote?: () => void;
+  isHdmiConnected?: boolean;
 }
 
 export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
@@ -27,6 +29,8 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   isVaultUnlocked,
   canAccessVault = true,
   onOpenVaultModal,
+  onOpenTvRemote,
+  isHdmiConnected = false,
 }) => {
   const tabs = [
     { id: 'videos' as ActiveTab, label: 'Movies', icon: Film, count: videoCount },
@@ -175,6 +179,54 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
             </button>
           );
         })}
+
+        {/* Companion TV Remote Button */}
+        {onOpenTvRemote && (
+          <button
+            onClick={onOpenTvRemote}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'transparent',
+              border: 'none',
+              padding: '6px 10px',
+              borderRadius: '12px',
+              color: isHdmiConnected ? '#34d399' : 'var(--text-muted)',
+              cursor: 'pointer',
+              position: 'relative',
+            }}
+            title="Open Vesper TV Remote"
+          >
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Tv size={18} />
+              {isHdmiConnected && (
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: '-1px',
+                    right: '-4px',
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: '50%',
+                    backgroundColor: '#10b981',
+                  }}
+                />
+              )}
+            </div>
+            <span
+              style={{
+                fontSize: '0.68rem',
+                fontWeight: 600,
+                marginTop: '3px',
+                letterSpacing: '-0.01em',
+              }}
+            >
+              Remote
+            </span>
+          </button>
+        )}
       </div>
     </nav>
   );

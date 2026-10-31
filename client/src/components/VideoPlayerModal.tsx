@@ -37,6 +37,7 @@ interface VideoPlayerModalProps {
   onDelete?: (id: string) => void;
   onSelectRelatedVideo?: (video: MediaItem) => void;
   onReclassify?: (id: string, newSubType: 'movie' | 'family') => void;
+  onCastToTv?: (media: MediaItem) => void;
 }
 
 type SettingsSubmenu = 'main' | 'speed' | 'quality';
@@ -48,6 +49,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   onDelete,
   onSelectRelatedVideo,
   onReclassify,
+  onCastToTv,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1391,6 +1393,34 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
                 <Bookmark size={15} fill={isSaved ? '#ffffff' : 'none'} />
                 <span>{isSaved ? 'Saved' : 'Save'}</span>
               </button>
+
+              {/* Cast to TV Pill */}
+              {onCastToTv && (
+                <button
+                  onClick={() => onCastToTv(media)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '0 14px',
+                    height: '36px',
+                    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+                    border: '1px solid rgba(56, 189, 248, 0.35)',
+                    borderRadius: '20px',
+                    color: '#38bdf8',
+                    cursor: 'pointer',
+                    fontSize: '0.84rem',
+                    fontWeight: 600,
+                    transition: 'all 0.15s ease',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(56, 189, 248, 0.25)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgba(56, 189, 248, 0.15)')}
+                  title="Cast this movie to the big HDMI TV screen"
+                >
+                  <Tv size={15} />
+                  <span>Play on TV</span>
+                </button>
+              )}
 
               {/* Move to Google Photos / Family Video Button */}
               {onReclassify && (

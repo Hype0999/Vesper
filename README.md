@@ -123,6 +123,58 @@ When traveling, your Raspberry Pi cannot reach your home Wi-Fi network. Standard
 - Broadcasts the Wi-Fi network: **`Vesper-Pi-Travel`** (Password: **`vesperpass`**).
 - Connect your iPhone or Android and open **`http://10.42.0.1:3000`** or **`http://vesper.local:3000`** without needing a monitor, keyboard, or external router!
 
+### 📺 10. Auto HDMI TV Connect & Living Room Remote Control System
+Vesper transforms your Raspberry Pi 4 into an autonomous living room entertainment console the second you plug it into any TV:
+
+```
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                      VESPER LIVING ROOM & TRAVEL TV ARCHITECTURE                       │
+├────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                        │
+│   [ Samsung / LG / Sony TV ]                                                          │
+│        ▲        ▲                                                                      │
+│        │ Video  │ HDMI-CEC Remote Keycodes (Play, Pause, D-pad, OK, Back)             │
+│        ▼        ▼                                                                      │
+│   [ Raspberry Pi 4 (HDMI0) ] <────── Auto DRM Hotplug & Audio Routing                 │
+│        │                                                                               │
+│        ├─► /sys/class/drm/card*-HDMI-A-*/status (Auto-detects TV plug/unplug)          │
+│        ├─► PipeWire / ALSA HDMI Sink Switcher (Routes audio directly to TV)            │
+│        ├─► /dev/cec0 + cec-client (Captures physical TV remote button events)          │
+│        ├─► Full-Screen Chromium 10-Foot Kiosk ("http://localhost:3000/tv")             │
+│        │                                                                               │
+│        ▼ Wi-Fi / AP (Zero Cellular Data)                                               │
+│   [ iPhone / Android Smartphone ]                                                      │
+│        └─► Vesper Companion Remote (Touch D-pad, Media Scrubbing, 1-Click "Cast to TV")│
+│                                                                                        │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+- **Instant DRM sysfs Hotplug Detection**:
+  - The backend watchdog continuously monitors `/sys/class/drm/card*-HDMI-A-*/status` and kernel uevents.
+  - The instant a micro-HDMI cable connects to a TV or monitor, Vesper probes the display's EDID for its native resolution (up to 4K 60Hz) and commercial model name (*Samsung 4K TV*, *LG OLED*, *Sony Bravia*, *TCL*).
+  - Automatically switches the Linux audio pipeline (PipeWire `wpctl`, PulseAudio `pactl`, or ALSA `amixer`) to output uncompressed digital audio over HDMI.
+  - Automatically launches or wakes the **Vesper 10-Foot Cinema Kiosk** (`/usr/local/bin/vesper-tv-kiosk.sh`) in full-screen hardware-accelerated resolution.
+  - When the TV is unplugged, Vesper gracefully pauses playback and sleeps the kiosk to conserve CPU and maintain ice-cool thermals.
+
+- **Physical TV Remote Control via HDMI-CEC (`/dev/cec0`)**:
+  - Raspberry Pi 4 features native hardware CEC support on micro-HDMI Pin 13.
+  - Using `cec-client` (from Debian `cec-utils`), Vesper intercepts signals from the TV's original manufacturer remote control:
+    - **D-Pad (Up, Down, Left, Right)**: Fluid spatial navigation across the 10-foot media grid with glowing focus rings.
+    - **OK / Select**: Plays the focused movie or activates menus.
+    - **Play / Pause / Stop**: Direct hardware transport toggles.
+    - **Rewind / Fast Forward**: Jump 10 seconds backward or forward.
+    - **Back / Return / Exit**: Dismisses the cinema player and returns to the media gallery.
+    - **Active Source (`as`) & Image View On (`tx 10 04`)**: When a movie begins streaming, Vesper sends CEC commands to automatically power on the TV and switch its input to the Raspberry Pi.
+
+- **Smartphone Companion Remote ("Phone as Remote")**:
+  - Accessible on any phone or laptop connected to Vesper via the **TV icon** in the Apple-style Control Center Capsule or Mobile Bottom Navigation bar.
+  - Features an Apple TV-inspired frosted glass tactile D-Pad with haptic feedback, transport controls, volume slider, mute, and a live "Now Playing on TV" scrubbing bar.
+  - **1-Click "Play on TV"**: Every movie in the YouTube Cinema player includes a glowing *Play on TV* pill. Tapping it beams the video to the big screen in zero-transcode full resolution and automatically opens the virtual remote.
+  - **Simulated HDMI Test Toggle**: An admin testing switch allows verifying HDMI detection and remote events in development without physical hardware.
+
+- **Real-World Hardware Diagnostic Script**:
+  - Run `sudo bash scripts/test-hdmi-cec.sh` on the Raspberry Pi 4 to verify HDMI physical links, audio routing, CEC bus scan, and test physical TV remote buttons interactively in real time.
+
 ---
 
 ## 🏛️ Architectural Comparison: Vesper vs. Plex, Jellyfin & Kodi
@@ -166,6 +218,19 @@ When traveling, your Raspberry Pi cannot reach your home Wi-Fi network. Standard
 | `Space` | Play / Pause Family Video |
 | `i` | Toggle EXIF Metadata Drawer |
 | `Esc` | Close Lightbox |
+
+### 📺 Physical TV Remote (HDMI-CEC) & 10-Foot Kiosk Navigation
+| Physical TV Remote Button | Keyboard / Air-Mouse Key | Action |
+| :--- | :--- | :--- |
+| `Up` | `Arrow Up` | Navigate up / Volume +5% (during playback) |
+| `Down` | `Arrow Down` | Navigate down / Volume -5% (during playback) |
+| `Left` | `Arrow Left` | Navigate left / Skip backward 10s |
+| `Right` | `Arrow Right` | Navigate right / Skip forward 10s |
+| `OK` / `Select` | `Enter` | Play focused movie / Show On-Screen Display |
+| `Play` / `Pause` | `Space` / `MediaPlayPause` | Toggle Play / Pause |
+| `Stop` | `s` | Stop TV playback and return to media grid |
+| `Back` / `Return` / `Exit` | `Escape` / `Backspace` | Return to media gallery / Exit player |
+| `Mute` | `m` | Mute / Unmute audio |
 
 ---
 
