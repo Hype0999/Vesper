@@ -7,6 +7,11 @@
 
 set -euo pipefail
 
+# Force non-interactive package operations & disable needrestart dialogs in Debian Bookworm
+export DEBIAN_FRONTEND=noninteractive
+export NEEDRESTART_MODE=a
+export UCF_FORCE_CONFFOLD=1
+
 # ANSI Color formatting
 BOLD='\033[1m'
 GREEN='\033[0;32m'
@@ -17,7 +22,7 @@ NC='\033[0m' # No Color
 
 echo -e "${BLUE}${BOLD}"
 echo "=================================================================="
-echo "      🚀 TRAVELHUB PRO - RASPBERRY PI 4 SETUP & DEPLOYMENT       "
+echo "      🚀 VESPER SANCTUARY - RASPBERRY PI 4 SETUP & DEPLOYMENT     "
 echo "      Zero-Transcode 4K Travel Media Hub & Wi-Fi Hotspot        "
 echo "=================================================================="
 echo -e "${NC}"
@@ -35,10 +40,30 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 echo -e "${GREEN}[✓] Target installation directory:${NC} $SCRIPT_DIR"
 echo -e "${GREEN}[✓] Executing as user:${NC} $REAL_USER (Home: $USER_HOME)"
 
+# Wait for any background apt/dpkg locks to release (unattended-upgrades, etc.)
+if fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || fuser /var/lib/apt/lists/lock >/dev/null 2>&1; then
+  echo -e "${YELLOW}[!] Waiting for background apt/dpkg lock to release...${NC}"
+  while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || fuser /var/lib/apt/lists/lock >/dev/null 2>&1; do
+    sleep 2
+  done
+  echo -e "${GREEN}[✓] Background lock released.${NC}"
+fi
+
 # 1. Update package lists and install essential system dependencies
-echo -e "\n${BLUE}[1/6] Installing system dependencies (Avahi mDNS, NetworkManager, build-essential)...${NC}"
-apt-get update -qq
-apt-get install -y -qq \
+echo -e "\n${BLUE}[1/8] Installing system dependencies (Avahi mDNS, NetworkManager, CEC, Chromium)...${NC}"
+echo -e "${YELLOW}    • Updating apt package repositories...${NC}"
+apt-get update
+
+# Detect available Chromium package name across Debian / Raspberry Pi OS variants
+CHROMIUM_PKG="chromium-browser"
+if ! apt-cache show chromium-browser > /dev/null 2>&1; then
+  CHROMIUM_PKG="chromium"
+fi
+
+echo -e "${YELLOW}    • Installing essential packages (${CHROMIUM_PKG}, cec-utils, alsa-utils)...${NC}"
+apt-get install -y \
+  -o Dpkg::Options::="--force-confdef" \
+  -o Dpkg::Options::="--force-confold" \
   curl \
   wget \
   git \
@@ -49,15 +74,16 @@ apt-get install -y -qq \
   libnss-mdns \
   cec-utils \
   alsa-utils \
-  chromium-browser \
-  qrencode > /dev/null
+  "$CHROMIUM_PKG" \
+  qrencode
 
 # Enable & restart Avahi for .local mDNS broadcast
+echo -e "${YELLOW}    • Configuring Avahi mDNS daemon...${NC}"
 systemctl enable avahi-daemon
 systemctl restart avahi-daemon
 
 # 2. Check or Install Node.js (LTS v20+)
-echo -e "\n${BLUE}[2/6] Checking Node.js runtime...${NC}"
+echo -e "\n${BLUE}[2/8] Checking Node.js runtime...${NC}"
 NODE_OK=0
 if command -v node > /dev/null 2>&1; then
   NODE_VER=$(node -v | cut -d'v' -f2 | cut -d'.' -f1)
@@ -69,13 +95,16 @@ fi
 
 if [ "$NODE_OK" -eq 0 ]; then
   echo -e "${YELLOW}[i] Node.js 20+ not found. Installing NodeSource Node.js 20 LTS...${NC}"
-  curl -fsSL https://deb.nodesource.com/setup_20.x | bash - > /dev/null
-  apt-get install -y -qq nodejs > /dev/null
+  curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+  apt-get install -y \
+    -o Dpkg::Options::="--force-confdef" \
+    -o Dpkg::Options::="--force-confold" \
+    nodejs
   echo -e "${GREEN}[✓] Node.js installed: $(node -v) with npm $(npm -v)${NC}"
 fi
 
 # 3. Environment Setup & Storage directory
-echo -e "\n${BLUE}[3/6] Setting up environment configuration & storage...${NC}"
+echo -e "\n${BLUE}[3/8] Setting up environment configuration & storage...${NC}"
 cd "$SCRIPT_DIR"
 
 if [ ! -f ".env" ]; then
@@ -86,7 +115,7 @@ if [ ! -f ".env" ]; then
 PORT=3000
 HOST=0.0.0.0
 NODE_ENV=production
-APP_NAME=TravelHub
+APP_NAME=Vesper
 STORAGE_DIR=./storage
 CORS_ORIGIN=*
 EOF
@@ -100,8 +129,10 @@ mkdir -p "$SCRIPT_DIR/storage/vault"
 chown -R "$REAL_USER:$REAL_USER" "$SCRIPT_DIR"
 
 # 4. Install npm dependencies & build full production bundle
-echo -e "\n${BLUE}[4/6] Installing project packages and compiling client & server bundles...${NC}"
+echo -e "\n${BLUE}[4/8] Installing project packages and compiling client & server bundles...${NC}"
+echo -e "${YELLOW}    • Running npm install (compiling native SQLite & Argon2 modules)...${NC}"
 sudo -u "$REAL_USER" npm install --no-audit --no-fund
+echo -e "${YELLOW}    • Building production bundles (shared, client, server)...${NC}"
 sudo -u "$REAL_USER" npm run build
 
 # 5. Install Vesper Auto-Hotspot Failover Service (Solves Train Travel / Missing Home Wi-Fi)
